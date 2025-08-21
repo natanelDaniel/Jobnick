@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jobnick Settings</title>
+    <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Jobnick Settings</h1>
+            <p>Configure your automated job applications on LinkedIn</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="profile">Profile Setup</button>
+            <button class="tab-btn" data-tab="preferences">Job Preferences</button>
+            <button class="tab-btn" data-tab="aiAgent">AI Agent</button>
+            <button class="tab-btn" data-tab="history">History</button>
+        </div>
+
+        <!-- Profile Setup Tab -->
+        <div class="tab-content active" id="profile">
+            <h2>Profile Information</h2>
+            <form id="profileForm">
+                <div class="form-group">
+                    <label for="fullName">Full Name</label>
+                    <input type="text" id="fullName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone">Phone Number</label>
+                    <input type="tel" id="phone">
+                </div>
+                
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" placeholder="City, Country">
+                </div>
+                
+                <div class="form-group">
+                    <label for="currentCompany">Current Company</label>
+                    <input type="text" id="currentCompany" placeholder="Your current company name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="linkedinUrl">LinkedIn Profile URL</label>
+                    <input type="url" id="linkedinUrl" placeholder="https://linkedin.com/in/your-profile">
+                </div>
+                
+                <div class="form-group">
+                    <label for="githubUrl">GitHub Profile URL</label>
+                    <input type="url" id="githubUrl" placeholder="https://github.com/your-username">
+                </div>
+                
+                <div class="form-group">
+                    <label for="websiteUrl">Personal Website</label>
+                    <input type="url" id="websiteUrl" placeholder="https://your-website.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="portfolioUrl">Portfolio URL</label>
+                    <input type="url" id="portfolioUrl" placeholder="https://your-portfolio.com">
+                </div>
+                
+                <div class="form-group">
+                    <label for="resumeFile">Resume/CV File</label>
+                    <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.txt" class="file-input">
+                    <small class="file-help">Upload your resume (PDF, DOC, DOCX, or TXT)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="coverLetterFile">Cover Letter File</label>
+                    <input type="file" id="coverLetterFile" accept=".pdf,.doc,.docx,.txt" class="file-input">
+                    <small class="file-help">Upload your cover letter (PDF, DOC, DOCX, or TXT)</small>
+                </div>
+                
+                <button type="submit" class="btn-primary">Save Profile</button>
+            </form>
+        </div>
+
+        <!-- Job Preferences Tab -->
+        <div class="tab-content" id="preferences">
+            <h2>Job Preferences</h2>
+            <form id="preferencesForm">
+                <div class="form-group">
+                    <label for="jobTitles">Desired Job Titles</label>
+                    <input type="text" id="jobTitles" placeholder="e.g., Software Engineer, Developer, Manager">
+                </div>
+                
+                <div class="form-group">
+                    <label for="keywords">Keywords to Match</label>
+                    <input type="text" id="keywords" placeholder="e.g., JavaScript, React, Python, Agile">
+                </div>
+                
+                <div class="form-group">
+                    <label for="excludeKeywords">Keywords to Exclude</label>
+                    <input type="text" id="excludeKeywords" placeholder="e.g., Senior, Lead, Director">
+                </div>
+                
+                <div class="form-group">
+                    <label for="locationPreference">Preferred Locations</label>
+                    <input type="text" id="locationPreference" placeholder="e.g., Remote, New York, London">
+                </div>
+                
+                <div class="form-group">
+                    <label for="companySize">Company Size</label>
+                    <select id="companySize">
+                        <option value="any">Any Size</option>
+                        <option value="startup">Startup (1-50)</option>
+                        <option value="small">Small (51-200)</option>
+                        <option value="medium">Medium (201-1000)</option>
+                        <option value="large">Large (1000+)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Experience Levels (filter)</label>
+                    <div class="checkbox-group" id="experienceFilters">
+                        <label><input type="checkbox" class="exp-filter" value="internship"> Internship</label>
+                        <label><input type="checkbox" class="exp-filter" value="entry"> Entry level</label>
+                        <label><input type="checkbox" class="exp-filter" value="associate"> Associate</label>
+                        <label><input type="checkbox" class="exp-filter" value="mid"> Mid-Senior level</label>
+                        <label><input type="checkbox" class="exp-filter" value="director"> Director</label>
+                        <label><input type="checkbox" class="exp-filter" value="executive"> Executive</label>
+                    </div>
+                    <small class="help-text">These map to LinkedIn's Experience level filter</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="datePosted">Date posted</label>
+                    <select id="datePosted">
+                        <option value="any">Any time</option>
+                        <option value="past24h">Past 24 hours</option>
+                        <option value="pastWeek">Past week</option>
+                        <option value="pastMonth">Past month</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Job Type</label>
+                    <div class="checkbox-group" id="jobTypeFilters">
+                        <label><input type="checkbox" class="jt-filter" value="F"> Full-time</label>
+                        <label><input type="checkbox" class="jt-filter" value="P"> Part-time</label>
+                        <label><input type="checkbox" class="jt-filter" value="C"> Contract</label>
+                        <label><input type="checkbox" class="jt-filter" value="T"> Temporary</label>
+                        <label><input type="checkbox" class="jt-filter" value="I"> Internship</label>
+                        <label><input type="checkbox" class="jt-filter" value="V"> Volunteer</label>
+                        <label><input type="checkbox" class="jt-filter" value="O"> Other</label>
+                    </div>
+                    <small class="help-text">Maps to LinkedIn job type filter</small>
+                </div>
+                
+                <button type="submit" class="btn-primary">Save Preferences</button>
+            </form>
+        </div>
+
+        <!-- AI Agent Tab -->
+        <div class="tab-content" id="aiAgent">
+            <h2>AI Agent Configuration</h2>
+            <form id="aiAgentForm">
+                <div class="form-group">
+                    <label for="geminiApiKey">Gemini API Key</label>
+                    <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key">
+                    <small class="help-text">Get your (free) API key from <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a></small>
+                </div>
+                
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 12px; font-weight: 500; color: #495057; font-size: 14px;">
+                        Submission Mode
+                    </label>
+                    <div class="toggle-wrapper">
+                        <div class="toggle-control">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="aiSubmissionMode" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-text" id="toggleMainText">Actually Submit Applications</span>
+                        </div>
+                        <div class="toggle-status-text" id="toggleStatusText">
+                            <span class="enabled-text" style="color: #28a745; font-weight: 600;">✓ LIVE MODE - Applications will be submitted</span>
+                            <span class="disabled-text" style="color: #dc3545; font-weight: 600; display: none;">✕ TEST MODE - Forms filled but not submitted</span>
+                        </div>
+                    </div>
+                    <small class="help-text">When enabled (green), applications will be fully submitted. When disabled (red), forms will be filled but not submitted (test mode).</small>
+                </div>
+                
+                <div class="form-group">
+                    <label style="display: block; margin-bottom: 12px; font-weight: 500; color: #495057; font-size: 14px;">
+                        Message Language
+                    </label>
+                    <div class="toggle-wrapper">
+                        <div class="toggle-control">
+                            <label class="toggle-label">
+                                <input type="checkbox" id="hebrewMessages">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-text" id="hebrewToggleMainText">Write Messages in Hebrew</span>
+                        </div>
+                        <div class="toggle-status-text" id="hebrewToggleStatusText">
+                            <span class="enabled-text" style="color: #28a745; font-weight: 600;">✓ HEBREW MODE - Messages will be written in Hebrew</span>
+                            <span class="disabled-text" style="color: #dc3545; font-weight: 600; display: none;">✕ ENGLISH MODE - Messages will be written in English</span>
+                        </div>
+                    </div>
+                    <small class="help-text">When enabled (green), AI-generated messages and notes will be written in Hebrew. When disabled (red), messages will be written in English.</small>
+                </div>
+                
+                <button type="submit" class="btn-primary">Save AI Settings</button>
+            </form>
+            
+            <div class="ai-status">
+                <h3>AI Agent Status</h3>
+                <div class="status-item">
+                    <span class="status-label">API Key:</span>
+                    <span id="apiKeyStatus" class="status-value">Not configured</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">AI Agent:</span>
+                    <span id="aiAgentStatus" class="status-value">Ready</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Resume File:</span>
+                    <span id="resumeFileStatus" class="status-value">Not uploaded</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Jobs Analyzed:</span>
+                    <span id="jobsAnalyzedCount" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">AI Applications:</span>
+                    <span id="aiApplicationsCount" class="status-value">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Resume:</span>
+                    <span id="resumeStatus" class="status-value">Not uploaded</span>
+                </div>
+            </div>
+            
+            <div class="ai-controls">
+                <!-- Beta Zone Collapsible Section -->
+                <div class="beta-zone-container">
+                    <button id="betaZoneToggle" class="beta-zone-toggle">
+                        <span class="beta-zone-icon">🧪</span>
+                        <span class="beta-zone-text">Beta Zone</span>
+                        <span class="beta-zone-arrow">▼</span>
+                    </button>
+                    
+                    <div id="betaZoneContent" class="beta-zone-content" style="display: none;">
+                        <h3>AI Job Search Controls</h3>
+                        <div class="control-buttons">
+                            <button id="startAISearch" class="btn-success">🚀 Start AI Job Search</button>
+                            <button id="stopAISearch" class="btn-danger" disabled>⏹️ Stop AI Search</button>
+                            <button id="testAI" class="btn-secondary">🧠 Test AI Analysis</button>
+                            <button id="toggleDebug" class="btn-info">🐛 Toggle Debug Mode</button>
+                        </div>
+                        
+                        <!-- Quick Actions -->
+                        <div class="quick-actions" style="margin: 20px 0; padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; border: 1px solid #dee2e6;">
+                            <h4 style="margin: 0 0 15px 0; color: #2c3e50; font-size: 16px;">🚀 Quick Actions</h4>
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <button id="quickUploadResume" class="btn-primary" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); border: none; padding: 12px 20px; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);">
+                                    📄 Upload Resume Now
+                                </button>
+                                <button id="quickTestUpload" class="btn-secondary" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); border: none; padding: 12px 20px; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);">
+                                    🧪 Test Upload
+                                </button>
+                            </div>
+                            <p style="margin: 10px 0 0 0; font-size: 13px; color: #6c757d; line-height: 1.4;">
+                                <strong>Upload Resume Now:</strong> Automatically detect and upload your resume to the current job page<br>
+                                <strong>Test Upload:</strong> Test the upload system and see detailed feedback
+                            </p>
+                        </div>
+                        
+                        <!-- Debug Panel -->
+                        <div id="debugPanel" class="debug-panel" style="display: none;">
+                            <h4>🐛 Debug Console</h4>
+                            <div class="debug-controls">
+                                <button id="clearDebugLog" class="btn-small">Clear Log</button>
+                                <button id="exportDebugLog" class="btn-small">Export Log</button>
+                                <button id="testGeminiAPI" class="btn-small">Test Gemini API</button>
+                                <button id="testResumeParse" class="btn-small">Test Resume Parsing</button>
+                                <button id="testScroll" class="btn-small">Test Scroll</button>
+                                <button id="testSearchPrefs" class="btn-small">Search by Preferences</button>
+                                <input id="testApplyUrl" type="text" placeholder="Paste job URL to test apply" style="width: 52%; margin-left: 6px;" />
+                                <button id="testApplyFlow" class="btn-small">Test Apply Flow</button>
+                                <button id="testCurrentPage" class="btn-small">Test Current Page</button>
+                                <button id="debugResumeLocations" class="btn-debug">Scan Resume Locations</button>
+                                <button id="autoAttachResume" class="btn-debug">Auto Attach Resume</button>
+                                <button id="checkStorageStatus" class="btn-debug">Check Storage</button>
+                                <button id="testAttachResumeClick" class="btn-debug">Test "Attach Resume" Click</button>
+                                <button id="analyzePageForResume" class="btn-debug">Analyze Page for Resume</button>
+                                <button id="testAIResumeDetection" class="btn-debug">Test AI Resume Detection</button>
+                            </div>
+                            <div id="debugLog" class="debug-log"></div>
+                            
+                            <div class="debug-info">
+                                <h5>Real-time Status:</h5>
+                                <div class="debug-status-grid">
+                                    <div class="debug-status-item">
+                                        <span class="debug-label">Current Page:</span>
+                                        <span id="debugCurrentPage" class="debug-value">Unknown</span>
+                                    </div>
+                                    <div class="debug-status-item">
+                                        <span class="debug-label">AI Agent State:</span>
+                                        <span id="debugAIState" class="debug-value">Ready</span>
+                                    </div>
+                                    <div class="debug-status-item">
+                                        <span class="debug-label">Last Action:</span>
+                                        <span id="debugLastAction" class="debug-value">None</span>
+                                    </div>
+                                    <div class="debug-status-item">
+                                        <span class="debug-label">Error Count:</span>
+                                        <span id="debugErrorCount" class="debug-value">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ai-info">
+                            <p><strong>How it works:</strong></p>
+                            <ul>
+                                <li>AI Agent automatically browses LinkedIn job listings</li>
+                                <li>Uses Gemini AI to analyze job fit based on your profile</li>
+                                <li>Automatically applies to suitable jobs</li>
+                                <li>Works in the background while you browse</li>
+                            </ul>
+                        </div>
+
+                        <div class="ai-info">
+                            <h4>📋 Resume Auto-Attachment Guide:</h4>
+                            <ol>
+                                <li><strong>Step 1:</strong> Upload your resume in the <strong>Profile Setup</strong> tab and click Save</li>
+                                <li><strong>Step 2:</strong> Navigate to any job application page</li>
+                                <li><strong>Step 3:</strong> Use <strong>"Auto Attach Resume"</strong> to automatically attach your saved resume</li>
+                            </ol>
+                            <p><strong>🔧 Troubleshooting:</strong> If attachment fails, try <strong>"Check Storage"</strong> to verify your resume is saved, and <strong>"Scan Resume Locations"</strong> to see what upload options the page offers.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div class="tab-content" id="history">
+            <h2>Applications History</h2>
+            <div class="history-controls">
+                <button id="exportHistory" class="btn-secondary">Export</button>
+                <button id="clearHistory" class="btn-danger">Clear</button>
+                <span id="historyCount" class="muted"></span>
+            </div>
+            <div class="history-table-wrapper">
+                <table class="history-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Job Title</th>
+                            <th>Company</th>
+                            <th>Location</th>
+                            <th>Status</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- rows will be populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="settings.js"></script>
+</body>
+</html> 

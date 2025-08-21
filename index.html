@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Job Manager Extension</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 1.2em;
+            margin-bottom: 30px;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 40px 0;
+        }
+        .feature {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.3s ease;
+        }
+        .feature:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .feature h3 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .cta-buttons {
+            text-align: center;
+            margin: 40px 0;
+        }
+        .btn {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        .btn-secondary {
+            background: linear-gradient(45deg, #95a5a6, #7f8c8d);
+        }
+        .privacy-link {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .privacy-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .privacy-link a:hover {
+            text-decoration: underline;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            border-top: 1px solid #eee;
+            color: #7f8c8d;
+        }
+        .highlight {
+            background: linear-gradient(45deg, #e8f4fd, #d1ecf1);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #17a2b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>LinkedIn Job Manager Extension</h1>
+        <p class="subtitle">Automate your LinkedIn job applications with AI-powered intelligence</p>
+        
+        <div class="highlight">
+            <h3>🚀 Transform Your Job Search</h3>
+            <p>Stop spending hours on repetitive job applications. Our Chrome extension uses advanced AI to automate the entire process, from form filling to personalized responses.</p>
+        </div>
+
+        <div class="features">
+            <div class="feature">
+                <h3>🤖 AI-Powered Automation</h3>
+                <p>Uses Google Gemini AI to analyze job descriptions and generate personalized application responses that match each position perfectly.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>📝 Smart Form Filling</h3>
+                <p>Automatically detects and fills out job application forms using your stored profile data, saving you valuable time.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>📄 Resume Management</h3>
+                <p>Intelligently uploads resumes to application forms and adapts them based on job requirements and company preferences.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>🔍 Job Search Automation</h3>
+                <p>Performs automated job searches based on your criteria and helps you apply to multiple positions efficiently.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>📊 Application Tracking</h3>
+                <p>Maintains a comprehensive history of your applications, responses, and follow-up activities.</p>
+            </div>
+            
+            <div class="feature">
+                <h3>🔒 Privacy First</h3>
+                <p>All your data is stored locally in your browser. We never sell or share your personal information with third parties.</p>
+            </div>
+        </div>
+
+        <div class="cta-buttons">
+            <a href="https://chrome.google.com/webstore" class="btn">Get from Chrome Web Store</a>
+            <a href="https://github.com/yourusername/linkedin-job-manager" class="btn btn-secondary">View on GitHub</a>
+        </div>
+
+        <div class="privacy-link">
+            <p><strong>Privacy & Transparency:</strong> <a href="privacy-policy.html">Read our complete Privacy Policy</a></p>
+        </div>
+
+        <div class="highlight">
+            <h3>💡 How It Works</h3>
+            <ol>
+                <li><strong>Setup:</strong> Configure your profile and preferences once</li>
+                <li><strong>Browse:</strong> Navigate to LinkedIn job postings as usual</li>
+                <li><strong>Automate:</strong> Click apply and let our AI handle the rest</li>
+                <li><strong>Review:</strong> Review and submit your application</li>
+                <li><strong>Track:</strong> Monitor your application status and responses</li>
+            </ol>
+        </div>
+
+        <div class="footer">
+            <p><strong>LinkedIn Job Manager Extension</strong> - Making job applications effortless</p>
+            <p>Built with ❤️ for job seekers everywhere</p>
+            <p><small>Not affiliated with LinkedIn Corporation</small></p>
+        </div>
+    </div>
+</body>
+</html> 

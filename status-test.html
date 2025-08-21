@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Status Component Test</title>
+  <style>
+    :root{
+      --bg1:#7C3AED;
+      --bg2:#A855F7;
+      --bg3:#F59E0B;
+      --text:#ffffff;
+      --card-bg: rgba(255,255,255,.08);
+      --card-brd: rgba(255,255,255,.15);
+      --shadow: 0 20px 40px rgba(0,0,0,.3);
+      --radius:20px;
+      --ease:cubic-bezier(.25,.46,.45,.94);
+      --primary1:#10B981;
+      --primary2:#059669;
+      --secondary1:#E0E7FF;
+      --secondary2:#C7D2FE;
+      --dark1:#374151;
+      --dark2:#1F2937;
+      --ok:#10B981;
+      --warn:#F59E0B;
+      --err:#EF4444;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(800px 400px at -10% -10%, #A855F7 0%, transparent 50%),
+                  radial-gradient(600px 300px at 110% 20%, #7C3AED 0%, transparent 50%),
+                  linear-gradient(135deg,var(--bg1) 0%,var(--bg2) 100%);
+      min-height: 100vh;
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background: rgba(255,255,255,.08);
+      border-radius: var(--radius);
+      padding: 30px;
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,.15);
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    .status-demo {
+      margin-bottom: 20px;
+    }
+
+    .status{
+      margin-top:16px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:12px;
+      padding:16px 20px;
+      border-radius:999px;
+      background: rgba(0,0,0,.3);
+      border:1px solid rgba(255,255,255,.15);
+      font-size:16px;
+      font-weight:500;
+      line-height:1.3;
+      backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 3;
+      min-height:48px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.2);
+      transition: all 0.3s var(--ease);
+    }
+
+    .status:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(0,0,0,.25);
+    }
+
+    .dot{
+      width:8px;height:8px;border-radius:50%;
+      background:var(--ok);
+      box-shadow:0 0 0 3px rgba(16,185,129,.3);
+      animation: pulse 2s infinite;
+      flex-shrink:0;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status.error .dot{ 
+      background:var(--err); 
+      box-shadow:0 0 0 3px rgba(239,68,68,.3); 
+    }
+
+    .status.partial .dot {
+      background:var(--warn);
+      box-shadow:0 0 0 3px rgba(245,158,11,.3);
+    }
+
+    .status.incomplete .dot {
+      background:var(--err);
+      box-shadow:0 0 0 3px rgba(239,68,68,.3);
+    }
+
+    .status.ready .dot {
+      background:var(--ok);
+      box-shadow:0 0 0 3px rgba(16,185,129,.3);
+    }
+
+    #statusText {
+      text-align: center;
+      letter-spacing: 0.02em;
+      word-wrap: break-word;
+      hyphens: auto;
+    }
+
+    .label {
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Redesigned Status Component</h1>
+    
+    <div class="status-demo">
+      <div class="label">Ready Status:</div>
+      <div class="status ready">
+        <span class="dot"></span>
+        <span id="statusText">Profile and resume ready for job filling</span>
+      </div>
+    </div>
+
+    <div class="status-demo">
+      <div class="label">Partial Status (Warning):</div>
+      <div class="status partial">
+        <span class="dot"></span>
+        <span id="statusText">Resume ready, missing profile data</span>
+      </div>
+    </div>
+
+    <div class="status-demo">
+      <div class="label">Incomplete Status (Error):</div>
+      <div class="status incomplete">
+        <span class="dot"></span>
+        <span id="statusText">Configure profile and upload resume in Settings</span>
+      </div>
+    </div>
+
+    <div class="status-demo">
+      <div class="label">Error Status:</div>
+      <div class="status error">
+        <span class="dot"></span>
+        <span id="statusText">An error occurred while processing</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html> 
