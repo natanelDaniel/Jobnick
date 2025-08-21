@@ -182,7 +182,7 @@ jobnick/
 ## 🆘 Support and Troubleshooting
 
 ### Common Issues
-- **Extension not working**: Make sure you're on a LinkedIn job page
+- **Extension not working**: Refresh the page
 - **AI not responding**: Verify your Gemini API key is valid
 - **Forms not filling**: Check that your profile is complete
 - **Messages not generating**: Ensure you have a valid API key
