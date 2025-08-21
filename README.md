@@ -50,21 +50,6 @@ A powerful Chrome extension that revolutionizes LinkedIn job applications with A
    - Click the puzzle piece icon in Chrome's toolbar
    - Find "Jobnick" and click the pin icon
 
-#### Method 2: Create Icon Files
-
-Before using the extension, you need to create actual icon files:
-
-1. **Create PNG icons** in these sizes:
-   - `icons/icon16.png` (16x16 pixels)
-   - `icons/icon48.png` (48x48 pixels)
-   - `icons/icon128.png` (128x128 pixels)
-
-2. **Use any image editor** like:
-   - GIMP (free)
-   - Paint.NET (free)
-   - Canva (online, free)
-   - Or download free icons from sites like Flaticon
-
 ### Step 2: Configure Your Profile
 
 1. Click the extension icon in your Chrome toolbar
