@@ -14,19 +14,34 @@ The extension provides three main features to enhance your job search experience
 Watch how Jobnick works in action:
 
 ### 🏥 Immunai Demo
-https://github.com/natanelDaniel/Jobnick/blob/master/videos/immunai.mp4
+<video width="320" height="240" controls>
+  <source src="videos/immunai.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ### 🚗 Mobileye Demo  
-https://github.com/natanelDaniel/Jobnick/blob/master/videos/Mobileye.mp4
+<video width="320" height="240" controls>
+  <source src="videos/Mobileye.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ### 📱 AppsFlyer Demo
-https://github.com/natanelDaniel/Jobnick/blob/master/videos/appsflyer.mp4
+<video width="320" height="240" controls>
+  <source src="videos/appsflyer.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ### 🎯 Meta Demo
-https://github.com/natanelDaniel/Jobnick/blob/master/videos/meta.mp4
+<video width="320" height="240" controls>
+  <source src="videos/meta.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ### 🔢 OneZero Demo
-https://github.com/natanelDaniel/Jobnick/blob/master/videos/onezero.mp4
+<video width="320" height="240" controls>
+  <source src="videos/onezero.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 ---
 
