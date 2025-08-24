@@ -16,20 +16,24 @@ The extension provides three main features to enhance your job search experience
   <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin: 20px 0;">
     <div style="text-align: center;">
       <h4>🏥 Immunai Demo</h4>
-      <video width="320" height="240" controls>
-        <source src="videos/immunai.mp4" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
+      <a href="videos/immunai.mp4" target="_blank">
+        <img src="icons/icon128.png" alt="Immunai Demo" width="320" height="240" style="border: 2px solid #0077b5; border-radius: 8px;">
+        <br>
+        <strong>🎬 Click to watch Immunai Demo</strong>
+      </a>
     </div>
     
     <div style="text-align: center;">
       <h4>🚗 Mobileye Demo</h4>
-      <video width="320" height="240" controls>
-        <source src="videos/Mobileye.mp4" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
+      <a href="videos/Mobileye.mp4" target="_blank">
+        <img src="icons/icon128.png" alt="Mobileye Demo" width="320" height="240" style="border: 2px solid #0077b5; border-radius: 8px;">
+        <br>
+        <strong>🎬 Click to watch Mobileye Demo</strong>
+      </a>
     </div>
   </div>
+  
+  <p><em>💡 Click on any demo to open the video in a new tab</em></p>
 </div>
 
 ### 1. 📋 Fill Job
