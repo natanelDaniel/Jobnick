@@ -18,28 +18,16 @@ Watch how Jobnick works in action:
 **Click the image above to watch the Immunai demo video on YouTube**
 
 ### 🚗 Mobileye Demo  
-<video width="320" height="240" controls>
-  <source src="releases/Mobileye.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![Mobileye Demo](releases/Mobileye.gif)
 
 ### 📱 AppsFlyer Demo
-<video width="320" height="240" controls>
-  <source src="releases/appsflyer.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![AppsFlyer Demo](releases/appsflyer.gif)
 
 ### 🎯 Meta Demo
-<video width="320" height="240" controls>
-  <source src="releases/meta.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![Meta Demo](releases/meta.gif)
 
 ### 🔢 OneZero Demo
-<video width="320" height="240" controls>
-  <source src="releases/onezero.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+![OneZero Demo](releases/onezero.gif)
 
 ---
 
