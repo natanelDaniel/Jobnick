@@ -9,32 +9,19 @@ The extension provides three main features to enhance your job search experience
 
 ## 🚀 Main Features
 
-<div align="center">
-  <h3>🎥 Demo Videos</h3>
-  <p>Watch how Jobnick works in action:</p>
-  
-  <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin: 20px 0;">
-    <div style="text-align: center;">
-      <h4>🏥 Immunai Demo</h4>
-      <a href="videos/immunai.mp4" target="_blank">
-        <img src="icons/icon128.png" alt="Immunai Demo" width="320" height="240" style="border: 2px solid #0077b5; border-radius: 8px;">
-        <br>
-        <strong>🎬 Click to watch Immunai Demo</strong>
-      </a>
-    </div>
-    
-    <div style="text-align: center;">
-      <h4>🚗 Mobileye Demo</h4>
-      <a href="videos/Mobileye.mp4" target="_blank">
-        <img src="icons/icon128.png" alt="Mobileye Demo" width="320" height="240" style="border: 2px solid #0077b5; border-radius: 8px;">
-        <br>
-        <strong>🎬 Click to watch Mobileye Demo</strong>
-      </a>
-    </div>
-  </div>
-  
-  <p><em>💡 Click on any demo to open the video in a new tab</em></p>
-</div>
+## 🎥 Demo Videos
+
+Watch how Jobnick works in action:
+
+### 🏥 Immunai Demo
+[![Immunai Demo](icons/icon128.png)](videos/immunai.mp4)
+**Click the image above to watch the Immunai demo video**
+
+### 🚗 Mobileye Demo  
+[![Mobileye Demo](icons/icon128.png)](videos/Mobileye.mp4)
+**Click the image above to watch the Mobileye demo video**
+
+---
 
 ### 1. 📋 Fill Job
 **Automatically fill out job applications on LinkedIn**
