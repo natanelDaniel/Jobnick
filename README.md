@@ -16,20 +16,6 @@ Watch how Jobnick works in action:
 ### 🏥 Immunai Demo
 ![Immunai Demo](releases/immunai_HD.gif)
 
-### 🚗 Mobileye Demo  
-![Mobileye Demo](releases/Mobileye_HD.gif)
-
-### 📱 AppsFlyer Demo
-![AppsFlyer Demo](releases/appsflyer_HD.gif)
-
-### 🎯 Meta Demo
-![Meta Demo](releases/meta_HD.gif)
-
-### 🔢 OneZero Demo
-![OneZero Demo](releases/onezero_HD.gif)
-
----
-
 ### 1. 📋 Fill Job
 **Automatically fill out job applications on LinkedIn**
 - AI-powered form detection and field mapping
@@ -226,4 +212,20 @@ This project is provided as-is for educational purposes. Users are responsible f
 
 ---
 
-**Note**: This extension uses advanced AI technology to enhance your job search process. Always review applications and messages before sending, and ensure you're genuinely interested in the opportunities you're pursuing. The AI is designed to assist, not replace, your judgment in the job search process. 
+**Note**: This extension uses advanced AI technology to enhance your job search process. Always review applications and messages before sending, and ensure you're genuinely interested in the opportunities you're pursuing. The AI is designed to assist, not replace, your judgment in the job search process.
+
+---
+
+## 🎬 Additional Demo Videos
+
+### 🚗 Mobileye Demo  
+![Mobileye Demo](releases/Mobileye_HD.gif)
+
+### 📱 AppsFlyer Demo
+![AppsFlyer Demo](releases/appsflyer_HD.gif)
+
+### 🎯 Meta Demo
+![Meta Demo](releases/meta_HD.gif)
+
+### 🔢 OneZero Demo
+![OneZero Demo](releases/onezero_HD.gif) 
