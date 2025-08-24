@@ -1,6 +1,11 @@
 # Jobnick Chrome Extension
 
-A powerful Chrome extension that revolutionizes LinkedIn job applications with AI-powered automation and smart job matching. The extension provides three main features to enhance your job search experience.
+<div align="center">
+  <img src="icons/icon128.png" alt="Jobnick Logo" width="128" height="128">
+  <h3>A powerful Chrome extension that revolutionizes LinkedIn job applications with AI-powered automation and smart job matching.</h3>
+</div>
+
+The extension provides three main features to enhance your job search experience.
 
 ## 🚀 Main Features
 
