@@ -18,16 +18,16 @@ Watch how Jobnick works in action:
 **Click the image above to watch the Immunai demo video on YouTube**
 
 ### 🚗 Mobileye Demo  
-![Mobileye Demo](releases/Mobileye.gif)
+![Mobileye Demo](releases/Mobileye_HD.gif)
 
 ### 📱 AppsFlyer Demo
-![AppsFlyer Demo](releases/appsflyer.gif)
+![AppsFlyer Demo](releases/appsflyer_HD.gif)
 
 ### 🎯 Meta Demo
-![Meta Demo](releases/meta.gif)
+![Meta Demo](releases/meta_HD.gif)
 
 ### 🔢 OneZero Demo
-![OneZero Demo](releases/onezero.gif)
+![OneZero Demo](releases/onezero_HD.gif)
 
 ---
 
