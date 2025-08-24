@@ -184,34 +184,90 @@ header p {
     font-style: italic;
 }
 
+/* File Display Boxes */
 .file-display {
-    margin-top: 10px;
-    padding: 10px;
-    background: #e8f5e8;
-    border: 1px solid #28a745;
-    border-radius: 6px;
+    background: #28a745;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 8px 0;
     display: flex;
     align-items: center;
-    gap: 10px;
-}
-
-.file-name {
+    gap: 8px;
     font-weight: 500;
-    color: #155724;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    animation: slideIn 0.3s ease;
 }
 
-.file-size {
-    color: #6c757d;
+.file-display .file-name {
+    font-size: 14px;
+    flex: 1;
+}
+
+.file-display .file-size {
     font-size: 12px;
+    opacity: 0.9;
+    font-weight: 400;
 }
 
-.cover-letter-display {
-    background: #fff3cd;
-    border: 1px solid #ffc107;
+.file-display.resume-display {
+    background: #28a745;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
 }
 
-.cover-letter-display .file-name {
-    color: #856404;
+.file-display.cover-letter-display {
+    background: #17a2b8;
+    box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+}
+
+.file-display.grade-sheet-display {
+    background: #6f42c1;
+    box-shadow: 0 2px 4px rgba(111, 66, 193, 0.3);
+}
+
+/* API Key Status Display Box */
+.api-key-status-display {
+    background: #28a745;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    animation: slideIn 0.3s ease;
+}
+
+.api-key-status-display .status-icon {
+    font-size: 16px;
+}
+
+.api-key-status-display .status-text {
+    font-size: 14px;
+    flex: 1;
+}
+
+.api-key-status-display .key-preview {
+    font-size: 12px;
+    opacity: 0.9;
+    font-weight: 400;
+    font-family: 'Courier New', monospace;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .checkbox-label {

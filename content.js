@@ -1,4 +1,7 @@
 // Content script for Jobnick extension
+let _lock_extract_generic = null;
+let _lock_ts = 0;
+
 class LinkedInJobManager {
     constructor() {
         this.profile = null;
@@ -68,7 +71,7 @@ class LinkedInJobManager {
                 case 'applyToJobWithAI':
                     this.sendDebug('applyToJobWithAI');
                     this.sendDebug(`message.jobData: ${JSON.stringify(message.jobData)}`);
-                    const aiResult = await this.applyToJobWithAI(message.jobData, message.profile, message.testMode);
+                    const aiResult = await this.applyToJobWithAI(message.jobData, message.profile, message.submitForm);
                     sendResponse({ success: true, result: aiResult });
                     break;
 
@@ -111,7 +114,7 @@ class LinkedInJobManager {
                     break;
                     
                 case 'testApplyFlow':
-                    const ok = await this.testApplyOnCurrentPage();
+                    const ok = await this.testApplyOnCurrentPage(message.url || window.location.href);
                     sendResponse({ success: ok.success, error: ok.error });
                     break;
                     
@@ -164,12 +167,12 @@ class LinkedInJobManager {
                         this.popupShowStatus('Job application started');
                         // Load profile data first
                         await this.loadProfileAndPreferences();
-                        
+                        const url = message.url || window.location.href;
                         // Use the complete test apply flow which includes:
                         // 1. Profile data filling (name, email, phone, etc.)
                         // 2. Resume upload via network or file attachment
                         // 3. Form submission
-                        const comprehensiveResult = await this.testApplyOnCurrentPage();
+                        const comprehensiveResult = await this.testApplyOnCurrentPage(url);
                         
                         if (comprehensiveResult.success) {
                             this.sendDebug('✅ Fill Job completed successfully!', 'success');
@@ -194,15 +197,58 @@ class LinkedInJobManager {
                     break;
                     
                 case 'extractFromCurrentPageGeneric':
-                    try {
-                        const url = window.location.href;
-                        const job = await this.extractJobFromURLWithAI(url);
-                        sendResponse({ success: true, job });
-                    } catch (e) {
-                        sendResponse({ success: false, error: e.message });
-                    }
-                    break;
-                case 'recruiterScanAndDraft':
+                        // 1) רוץ רק ב־top frame
+                        try {
+                          if (window.top !== window) {
+                            sendResponse({ success: false, error: 'Not top frame' });
+                            return true;
+                          }
+                        } catch (_) {
+                          // אם דף חוסם גישה ל-top, נמשיך כרגיל
+                        }
+                      
+                        // 2) מזוהה לפי URL, כדי למנוע כפילויות מאותו דף
+                        const href = message?.url || window.location.href;
+                        const now  = Date.now();
+                        const SAME_URL_WINDOW_MS = 8000;
+                      
+                        // שמירות גלובליות
+                        this._lastExtractUrlTs = this._lastExtractUrlTs || 0;
+                        this._lastExtractUrl   = this._lastExtractUrl   || '';
+                      
+                        // אם יש נעילה פעילה וגם אותו URL בתוך חלון הזמן, החזר את אותה הבטחה
+                        if (_lock_extract_generic && (now - _lock_ts) < SAME_URL_WINDOW_MS && this._lastExtractUrl === href) {
+                          _lock_extract_generic.then(
+                            job => sendResponse({ success: true, job }),
+                            err => sendResponse({ success: false, error: err?.message || String(err) })
+                          );
+                          return true; // חשוב להשאיר את הערוץ פתוח
+                        }
+                      
+                        // 3) יצירת נעילה חדשה עבור ה־URL הזה
+                        _lock_ts = now;
+                        this._lastExtractUrl   = href;
+                        this._lastExtractUrlTs = now;
+                      
+                        _lock_extract_generic = (async () => {
+                          const job = await this.extractJobFromURLWithAI(href);
+                          return job;
+                        })();
+                      
+                        _lock_extract_generic
+                          .then(
+                            job => sendResponse({ success: true, job }),
+                            err => sendResponse({ success: false, error: err?.message || String(err) })
+                          )
+                          .finally(() => {
+                            // משחררים את הנעילה רק אחרי שההבטחה הסתיימה
+                            _lock_extract_generic = null;
+                          });
+                      
+                        return true; // אסינכרוני
+                
+                    
+                case 'recruiterScanAndDraft': 
                     (async () => {
                         try {
                           const res = await this.recruiterScanAndDraft(message.payload || {});
@@ -216,7 +262,7 @@ class LinkedInJobManager {
                 case 'referralScanAndDraft':
                     (async () => {
                         try {
-                          const res = await this.referralScanAndDraft(message.payload || {});
+                          const res = await this.referralScanAndDraft(message.payload || {}, message.position_url || '');
                           sendResponse({ success: true, result: res });
                         } catch (e) {
                           sendResponse({ success: false, error: e?.message || String(e) });
@@ -482,10 +528,10 @@ class LinkedInJobManager {
     }
 
     // Generic job extraction from any job page (not just LinkedIn)
-    async extractGenericJobFromDOM() {
+    async extractGenericJobFromDOM(url) {
         // Deprecated path -> route to URL-based AI extraction
         this.sendDebug('extractGenericJobFromDOM');
-        return this.extractJobFromURLWithAI(window.location.href);
+        return this.extractJobFromURLWithAI(url);
     }
 
     evaluateJobFit(jobData) {
@@ -1004,9 +1050,9 @@ class LinkedInJobManager {
         }
     }
 
-    async applyToJobWithAI(jobData, profile, testMode = false) {
+    async applyToJobWithAI(jobData, profile, submitForm = false) {
         try {
-            this.sendDebug(`Apply: navigating if needed and locating Apply button for "${jobData.title || 'Unknown'}" (Test mode: ${testMode})`, 'info');
+            this.sendDebug(`Apply: navigating if needed and locating Apply button for "${jobData.title || 'Unknown'}" (submitForm: ${submitForm})`, 'info');
 
             // Find the Easy Apply button
             const applyButton = this.findApplyButton();
@@ -1050,7 +1096,7 @@ class LinkedInJobManager {
 
             // Try to attach resume to LinkedIn Easy Apply form
             try {
-                const resumeAttached = await this.attachResumeInDoc(document);
+                const resumeAttached = await this.attachFilesInDoc(document);
                 if (resumeAttached) {
                     this.sendDebug('✅ Resume attached to LinkedIn Easy Apply form', 'success');
                 }
@@ -1060,19 +1106,19 @@ class LinkedInJobManager {
 
             const formResult = await this.fillApplicationFormWithProfile(profile);
             if (formResult.success) {
-                if (testMode) {
+                if (!submitForm) {
                     this.sendDebug('🧪 Test mode: Form filled successfully but skipping submission', 'info');
                     
                     // Record test mode activity to history
                     await this.recordFormFilling(jobData, 'Test Mode - Filled Only', 'LinkedIn Easy Apply', {
                         fieldsFilled: formResult.fieldsFilled || 0,
-                        testMode: true
+                        submitForm: false
                     });
                     
                     return { 
                         success: true, 
                         message: 'Form filled successfully (test mode - not submitted)',
-                        testMode: true
+                        submitForm: false
                     };
                 } else {
                 const submitResult = await this.submitApplication();
@@ -1109,7 +1155,7 @@ class LinkedInJobManager {
             const formFields = document.querySelectorAll('input, textarea, select');
             
             for (const field of formFields) {
-                await this.fillFieldWithProfile(field, profile);
+                await this.fillFieldWithProfile(field, profile, document);
             }
             
             return { success: true };
@@ -1129,7 +1175,7 @@ class LinkedInJobManager {
                         // 🔹 אם זה שדה תשובה ארוכה ונראה כמו שאלה כללית — נבקש תשובה מה‑AI
             const isEmpty = (field.isContentEditable ? (field.textContent || '') : (field.value || '')).trim().length === 0;
             if (isEmpty && this.isLongAnswerField(field)) {
-                const q = this.extractQuestionText(field);
+                const q = this.extractQuestionText(field, doc);
                 if (this.looksLikeGeneralQuestion(q)) {
                     const ai = await this.answerWithAI(q);
                     if (ai) {
@@ -1596,7 +1642,7 @@ class LinkedInJobManager {
         }
     }
 
-    async testApplyOnCurrentPage() {
+    async testApplyOnCurrentPage(url=window.location.href) {
         try {
             this.sendDebug('Test Apply Flow: Starting test on current page...', 'info');
 
@@ -1617,7 +1663,7 @@ class LinkedInJobManager {
                 window.location.href = applyButton.href;
                 await this.delay(3000);
                 this.sendDebug('Test Apply Flow: External site loaded. Attempting to fill and submit form...', 'info');
-                const generic = await this.applyOnGenericExternalSite();
+                const generic = await this.applyOnGenericExternalSite(url);
                 return generic;
             }
 
@@ -1627,25 +1673,25 @@ class LinkedInJobManager {
                 
                 // Check submission mode setting
                 const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-                const testMode = aiAgent?.aiSubmissionMode === true; // Default to true
+                const submitForm = aiAgent?.aiSubmissionMode; // Default to true
                 
-                if (testMode) {
+                if (!submitForm) {
                     this.sendDebug('🧪 Test mode enabled - filling form but NOT submitting', 'info');
                 } else {
                     this.sendDebug('✅ Live mode - filling form AND submitting', 'info');
                 }
                 
-                const applyResult = await this.applyToJobWithAI(this.currentJob || {}, this.profile, !testMode);
+                const applyResult = await this.applyToJobWithAI(this.currentJob || {}, this.profile, submitForm);
                 if (applyResult.success) {
-                    const modeText = testMode ? 'filled (test mode)' : 'submitted';
+                    const modeText = submitForm ? 'filled (test mode)' : 'submitted';
                     this.sendDebug(`Test Apply Flow: LinkedIn Easy Apply ${modeText}!`, 'success');
-                    return { success: true, message: `LinkedIn Easy Apply ${modeText}`, testMode: !testMode };
+                    return { success: true, message: `LinkedIn Easy Apply ${modeText}`, submitForm: submitForm };
                 }
                 this.sendDebug('Test Apply Flow: LinkedIn Easy Apply failed, falling back to generic routine.', 'warning');
             }
 
             // Fallback: run a generic external-site apply routine on any page
-            const res = await this.applyOnGenericExternalSite();
+            const res = await this.applyOnGenericExternalSite(url);
             return res;
         } catch (error) {
             console.error('Error in testApplyOnCurrentPage:', error);
@@ -1653,13 +1699,13 @@ class LinkedInJobManager {
         }
     }
 
-    async applyOnGenericExternalSite() {
+    async applyOnGenericExternalSite(url=window.location.href) {
         try {
             // Check submission mode setting first
             const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-            const testMode = aiAgent?.aiSubmissionMode === true; // Default to true
+            const submitForm = aiAgent?.aiSubmissionMode;
             
-            if (testMode) {
+            if (!submitForm) {
                 this.sendDebug('🧪 Test mode enabled - will fill forms but NOT submit', 'info');
             } else {
                 this.sendDebug('✅ Live mode - will fill forms AND submit', 'info');
@@ -1673,7 +1719,7 @@ class LinkedInJobManager {
                 this.sendDebug('✅ Network upload successful! Proceeding to form filling and submission...', 'success');
                 
                 // אם ההעלאה הרשתית הצליחה, נמשיך למלא את הטופס ולהגיש
-                const fillResult = await this.fillAndSubmitAfterNetworkUpload();
+                const fillResult = await this.fillAndSubmitAfterNetworkUpload(url);
                 return {
                     success: true,
                     method: 'network-upload',
@@ -1698,11 +1744,11 @@ class LinkedInJobManager {
             }
 
             // שלב 2.5: ניסיון הצמדת קורות חיים אוטומטית - ENHANCED
-            this.sendDebug('🔍 Searching for resume upload locations...', 'info');
-            const resumeAttached = await this.attachResumeAcrossDocs();
-            if (resumeAttached) {
-                this.sendDebug('✅ Resume successfully attached before form filling', 'success');
-            }
+            // this.sendDebug('🔍 Searching for resume upload locations...', 'info');
+            // const resumeAttached = await this.attachResumeAcrossDocs();
+            // if (resumeAttached) {
+            //     this.sendDebug('✅ Resume successfully attached before form filling', 'success');
+            // }
 
             // נתוני פרופיל
             const p = this.profile || {};
@@ -1716,12 +1762,19 @@ class LinkedInJobManager {
             // שלב 3: איתור מועמדי טפסים, ניקוד וקפיצה ממוקדת
             let totalFilled = 0;
             let submitAttempted = false;
-            
+            let filesAttached = false;
             for (const doc of docs) {
                 const candidates = this.clusterForms(doc)
                     .map(root => ({ root, score: this.scoreFormCandidate(root) }))
                     .sort((a,b) => b.score - a.score);
 
+                if (candidates.length === 0){
+                    const filled = await this.goToAndFillForm(doc, p);
+                    totalFilled += filled;
+                    if (!networkUpload.uploaded && !filesAttached) {
+                        filesAttached = await this.attachFilesInDoc(doc);
+                    }
+                }
                 for (const cand of candidates) {
                     // אם המועמד מתוך iframe – נגלול גם את ה־iframe (אם ניתן)
                     try { cand.root.scrollIntoView?.({ behavior: 'smooth', block: 'center' }); } catch(_) {}
@@ -1731,18 +1784,18 @@ class LinkedInJobManager {
                     totalFilled += filled;
 
                     // Try to attach resume again within this specific form if not done by network
-                    if (!networkUpload.uploaded && !resumeAttached) {
-                        await this.attachResumeInDoc(doc);
+                    if (!networkUpload.uploaded && !filesAttached) {
+                        filesAttached = await this.attachFilesInDoc(doc);
                     }
 
                     // נסה ל־Submit מתוך אותה מכולה
                     const submit =
                         cand.root.querySelector('button[type="submit"], input[type="submit"]') ||
                         Array.from(cand.root.querySelectorAll('button, a, [role="button"], input[type="button"]'))
-                             .find(b => /apply|apply now|send application|submit|שלח|להגיש|הגש/i.test(this.textOf(b)));
+                             .find(b => /apply|apply now|send application|submit|שלח|להגיש|הגש/i.test(this.textOf(b)) && !/linkedin|linked in/i.test(this.textOf(b)));
                     
                     if (submit) {
-                        if (testMode) {
+                        if (!submitForm) {
                             this.sendDebug('🧪 Test mode: Found submit button but skipping submission', 'info');
                             submitAttempted = true;
                         } else {
@@ -1781,16 +1834,16 @@ class LinkedInJobManager {
             // אם הגענו לכאן — לא נמצאה לחיצת Submit; ננסה חיפוש גלובלי אחרון
             if (!submitAttempted) {
                 // Try one more time to attach resume before global submit if network didn't work
-                if (!networkUpload.uploaded && !resumeAttached) {
-                    await this.attachResumeAcrossDocs();
+                if (!networkUpload.uploaded && !filesAttached){
+                    filesAttached = await this.attachFilesInDoc(document);
                 }
                 
                 const btn = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"], input[type="button"]'))
                     .filter(this.isVisible.bind(this))
-                    .find(el => /apply|submit|send application|שלח|להגיש|הגש/i.test(this.textOf(el)));
+                    .find(el => /apply|submit|send application|שלח|להגיש|הגש/i.test(this.textOf(el)) && !/linkedin|linked in/i.test(this.textOf(el)));
                 
                 if (btn) {
-                    if (testMode) {
+                    if (!submitForm) {
                         this.sendDebug('🧪 Test mode: Found global submit button but skipping submission', 'info');
                     } else {
                     try { 
@@ -1819,30 +1872,30 @@ class LinkedInJobManager {
             }
 
             // לא נמצאו טפסים או כפתורי הגשה
-            if (networkUpload.uploaded) {
-                if (testMode) {
+            if (networkUpload.uploaded || filesAttached) {
+                if (!submitForm) {
                     this.sendDebug('🧪 Test mode: Network upload succeeded, forms filled but not submitted', 'success');
                     
                     // Record test mode activity to history
-                    const extracted = await this.extractGenericJobFromDOM();
+                    const extracted = await this.extractGenericJobFromDOM(url);
                     const jobCtx = this.currentJob || extracted;
                     await this.recordFormFilling(jobCtx, 'Test Mode - Network Upload + Forms Filled', 'Generic External Site', {
                         networkUpload: true,
                         totalFilled: totalFilled,
-                        testMode: true
+                        submitForm: false
                     });
                     
                     return { 
                         success: true, 
                         method: 'test-mode-network-only',
                         message: 'Resume uploaded and forms filled successfully (test mode - no submission)',
-                        testMode: true
+                        submitForm: false
                     };
                 } else {
                 this.sendDebug('Network upload succeeded but no submit mechanism found', 'warning');
                     
                     // Record activity to history
-                    const extracted = await this.extractGenericJobFromDOM();
+                    const extracted = await this.extractGenericJobFromDOM(url);
                     const jobCtx = this.currentJob || extracted;
                     await this.recordFormFilling(jobCtx, 'Network Upload + Forms Filled (No Submit)', 'Generic External Site', {
                         networkUpload: true,
@@ -1857,29 +1910,29 @@ class LinkedInJobManager {
                 };
                 }
             } else {
-                if (testMode) {
+                if (!submitForm) {
                     this.sendDebug('🧪 Test mode: Forms filled but no submission attempted', 'success');
                     this.sendDebug(`currentJob: ${JSON.stringify(this.currentJob)}`);
-                    const extracted = await this.extractGenericJobFromDOM();
+                    const extracted = await this.extractGenericJobFromDOM(url);
                     this.sendDebug(`extractGenericJobFromDOM: ${JSON.stringify(extracted)}`);
                     // Record test mode activity to history
                     const jobCtx = this.currentJob || extracted;
                     await this.recordFormFilling(jobCtx, 'Test Mode - Forms Filled Only', 'Generic External Site', {
                         totalFilled: totalFilled,
-                        testMode: true
+                        submitForm: false
                     });
                     
                     return { 
                         success: true, 
                         method: 'test-mode-fill-only',
                         message: 'Forms filled successfully (test mode - no submission)',
-                        testMode: true
+                        submitForm: true
                 };
             } else {
                 this.sendDebug('Generic Apply: no upload or submit mechanisms found', 'warning');
                     
                     // Record failed attempt to history
-                    const extracted = await this.extractGenericJobFromDOM();
+                    const extracted = await this.extractGenericJobFromDOM(url);
                     const jobCtx = this.currentJob || extracted;
                     await this.recordFormFilling(jobCtx, 'No Forms or Submit Found', 'Generic External Site', {
                         totalFilled: totalFilled,
@@ -1897,12 +1950,11 @@ class LinkedInJobManager {
     }
     
     // מילוי והגשה לאחר העלאה רשתית מוצלחת
-    async fillAndSubmitAfterNetworkUpload() {
+    async fillAndSubmitAfterNetworkUpload(url=window.location.href) {
         try {
             this.sendDebug('📝 Starting form filling after network upload...', 'info');
             
             const profile = this.profile || {};
-            
             // איסוף כל הטפסים הנראים
             const visibleForms = Array.from(document.querySelectorAll('form')).filter(this.isVisible.bind(this));
             let totalFilled = 0;
@@ -1943,21 +1995,21 @@ class LinkedInJobManager {
             // ניסיון הגשה
             const submitButton = Array.from(document.querySelectorAll('button, input[type="submit"], a, [role="button"]'))
                 .filter(this.isVisible.bind(this))
-                .find(btn => /apply|submit|send|הגש|שלח/i.test(this.textOf(btn)));
+                .find(btn => /apply|submit|send|הגש|שלח/i.test(this.textOf(btn)) && !/linkedin|linked in/i.test(this.textOf(btn)));
             
             if (submitButton) {
                 // Check submission mode before clicking
                 const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-                const testMode = aiAgent?.aiSubmissionMode === true;  
-                if (testMode) {
+                const submitForm = aiAgent?.aiSubmissionMode;  
+                if (!submitForm) {
                     this.sendDebug('🧪 Test mode: Found submit button but skipping submission', 'info');
                     
                     // Record test mode activity to history
-                    const extracted = await this.extractGenericJobFromDOM();
+                    const extracted = await this.extractGenericJobFromDOM(url);
                     const jobCtx = this.currentJob || extracted;
                     await this.recordFormFilling(jobCtx, 'Test Mode - Forms Filled (Submit Skipped)', 'Network Upload + Form Fill', {
                         fieldsFilled: totalFilled,
-                        testMode: true,
+                        submitForm: false,
                         submitButtonFound: true
                     });
                     
@@ -1966,7 +2018,7 @@ class LinkedInJobManager {
                         fieldsFileld: totalFilled,
                         submitted: false,
                         message: 'Form filled successfully (test mode - no submission)',
-                        testMode: true
+                        submitForm: true
                     };
                 } else {
                 this.sendDebug(`🚀 Found submit button, clicking...`, 'info');
@@ -1980,7 +2032,7 @@ class LinkedInJobManager {
                 this.sendDebug(`✅ Form submitted after network upload`, 'success');
                     
                     // Record successful submission to history
-                    const extracted = await this.extractGenericJobFromDOM();
+                    const extracted = await this.extractGenericJobFromDOM(url);
                     const jobCtx = this.currentJob || extracted;
                     await this.recordFormFilling(jobCtx, 'Submitted Successfully', 'Network Upload + Form Fill', {
                         fieldsFilled: totalFilled,
@@ -2016,6 +2068,15 @@ class LinkedInJobManager {
     // === SMART PRELOAD & FORM LOCATION HELPERS ===
     isVisible(el) {
         if (!el) return false;
+        
+        // Special handling for checkboxes - be more lenient
+        if (el.type === 'checkbox') {
+            const st = getComputedStyle(el);
+            if (st.display === 'none' || st.visibility === 'hidden') return false;
+            // For checkboxes, don't check opacity or dimensions as strictly
+            return true;
+        }
+        
         const st = getComputedStyle(el);
         if (st.display === 'none' || st.visibility === 'hidden' || parseFloat(st.opacity||'1') === 0) return false;
         const r = el.getBoundingClientRect();
@@ -2224,7 +2285,7 @@ class LinkedInJobManager {
         // כפתור הגשה?
         const hasSubmit = root.querySelector('button[type="submit"], input[type="submit"]') ||
             Array.from(root.querySelectorAll('button, a, [role="button"]'))
-                .some(b => /apply|submit|send|שלח|הגש|להגיש/i.test(this.textOf(b)));
+                .some(b => /apply|submit|send|שלח|הגש|להגיש/i.test(this.textOf(b)) && !/linkedin|linked in/i.test(this.textOf(b)));
         if (hasSubmit) score += 10;
         // האם יש תיבות "email/phone/name"
         const blob = (root.textContent || '').toLowerCase();
@@ -2234,7 +2295,7 @@ class LinkedInJobManager {
         return score;
     }
 
-    async chooseValueFor(el, profile = {}) {
+    async chooseValueFor(el, profile = {}, doc) {
         const name = (el.getAttribute?.('name') || '').toLowerCase();
         const ph   = (el.getAttribute?.('placeholder') || '').toLowerCase();
         const aria = (el.getAttribute?.('aria-label') || '').toLowerCase();
@@ -2242,7 +2303,6 @@ class LinkedInJobManager {
         const labFor = (id ? (el.ownerDocument.querySelector(`label[for="${id}"]`)?.textContent || '') : '').toLowerCase();
         const ownLbl = (el.closest('label')?.textContent || '').toLowerCase();
         const around = (el.closest('[class*="field" i], [class*="form" i], .w-input, .w-form, .form-group')?.textContent || '').toLowerCase();
-        const blob = `${name} ${ph} ${aria} ${labFor} ${ownLbl} ${around}`;
 
         const fullName = (profile.fullName || '').trim();
         const firstName = (profile.firstName || (fullName.split(' ')[0] || '')).trim();
@@ -2300,13 +2360,9 @@ class LinkedInJobManager {
             return profile.country || '';
         }
         try {
-            if (this.isLongAnswerField(el)) {
-                const q = this.extractQuestionText(el);
-                if (this.looksLikeGeneralQuestion(q) && !this.isRegularQuestion(q)) {
-                    const ai = await this.answerWithAI(q);
-                    return ai;
-                }
-            }
+            const q = this.extractQuestionText(el, doc);
+            const ai = await this.answerWithAI(q);
+            return ai;
         } catch(_) {}
         return '';
     }
@@ -2325,9 +2381,30 @@ class LinkedInJobManager {
 
         // מילוי
         let filled = 0;
-        const inputs = Array.from(root.querySelectorAll('input, textarea, select, [contenteditable="true"]'))
+        
+        // Debug: Log all inputs before filtering
+        const allInputs = Array.from(root.querySelectorAll('input, textarea, select, [contenteditable="true"]'));
+        console.log('All inputs found:', allInputs.length);
+        allInputs.forEach((input, index) => {
+            if (input.type === 'checkbox') {
+                console.log(`Checkbox ${index}:`, {
+                    type: input.type,
+                    visible: this.isVisible(input),
+                    offsetParent: input.offsetParent,
+                    computedStyle: getComputedStyle(input),
+                    boundingRect: input.getBoundingClientRect(),
+                    classes: input.className,
+                    parentClasses: input.parentElement?.className
+                });
+            }
+        });
+        
+        const inputs = allInputs
             .filter(this.isVisible.bind(this))
             .filter(el => (el.type || '').toLowerCase() !== 'password' && (el.type || '').toLowerCase() !== 'file');
+        
+        console.log('Visible inputs after filtering:', inputs.length);
+        console.log('Checkboxes found:', inputs.filter(el => el.type === 'checkbox').length);
 
             for (const el of inputs) {
                 if ((el.tagName || '').toLowerCase() === 'select') {
@@ -2338,14 +2415,135 @@ class LinkedInJobManager {
                 }
                 if ((el.type || '').toLowerCase() === 'checkbox') {
                     const t = this.textOf(el) + ' ' + (el.closest('label')?.textContent || '').toLowerCase();
-                    if (/agree|terms|consent|privacy|תנאים|הסכמה/.test(t)) { try { el.checked = true; el.dispatchEvent(new Event('change', { bubbles: true })); filled++; } catch(_) {} }
+                    if (/agree|terms|consent|privacy|תנאים|הסכמה/.test(t)) 
+                        { try 
+                            { 
+                                el.checked = true;
+                                el.dispatchEvent(new Event('change', { bubbles: true }));
+                                 filled++; } catch(_) {} }
+                    else {
+                        const checkGroupName1 = el.name;
+                        const checkGroupName2 = el.className;
+                        // Find all inputs with the same name OR the same class name
+                        const nameSelector = `input[name="${checkGroupName1}"]`;
+                        const classSelector = `input.${checkGroupName2.split(' ').filter(cls => cls.trim()).join('.')}`;
+                        let allOptions1 = [];
+                        let allOptions2 = [];
+                        if (checkGroupName1){
+                            allOptions1 = root.querySelectorAll(nameSelector);
+                        }
+                        if (checkGroupName2){
+                            allOptions2 = root.querySelectorAll(classSelector);
+                        }
+                        // merge all options, remove duplicates
+                        const allOptions = [...allOptions1, ...allOptions2].filter((option, index, self) =>
+                            index === self.findIndex((t) => t.outerHTML === option.outerHTML)
+                        );
+                        if (allOptions.length > 1) {
+                            const anyProcessed = Array.from(allOptions).some(opt => opt.hasAttribute('data-processed-group'));
+                            if (anyProcessed) {
+                                continue;
+                            }
+                            allOptions.forEach(opt => opt.setAttribute('data-processed-group', 'true'));
+                            const questionText = getTextBeforeInput(allOptions[0], root);
+                            const bestAnswer = await this.chooseValueForMultipleChoice(questionText, allOptions, profile);
+                            if (bestAnswer) {
+                                const targetOption = Array.from(allOptions).find(opt => opt.value.toLowerCase() === bestAnswer.toLowerCase());
+                                if (targetOption) {
+                                    targetOption.checked = true;
+                                    targetOption.dispatchEvent(new Event('change', { bubbles: true }));
+                                    filled++;
+                                    // unmark all other options
+                                    allOptions.forEach(opt => {
+                                        if (opt !== targetOption) {
+                                            opt.checked = false;
+                                            opt.dispatchEvent(new Event('change', { bubbles: true }));
+                                        }
+                                    });
+                                }
+                                else {
+                                    const targetOption2 = Array.from(allOptions).find(opt => opt.outerHTML.toLowerCase().includes(bestAnswer.toLowerCase()));
+                                    if (targetOption2) {
+                                        targetOption2.checked = true;
+                                        targetOption2.dispatchEvent(new Event('change', { bubbles: true }));
+                                        filled++;
+                                        // unmark all other options
+                                        allOptions.forEach(opt => {
+                                            if (opt !== targetOption2) {
+                                                opt.checked = false;
+                                                opt.dispatchEvent(new Event('change', { bubbles: true }));
+                                            }
+                                        });
+                                    }
+                                    else {
+                                        const bestAnswerIndex = await this.chooseValueForMultipleChoice(questionText, allOptions, profile, true);
+                                        const bestAnswerIndexInt = parseInt(bestAnswerIndex);
+                                        if (bestAnswerIndexInt !== null) {
+                                            allOptions[bestAnswerIndexInt].checked = true;
+                                            allOptions[bestAnswerIndexInt].dispatchEvent(new Event('change', { bubbles: true }));
+                                            filled++;
+                                            // unmark all other options
+                                            allOptions.forEach(opt => {
+                                                if (opt !== allOptions[bestAnswerIndexInt]) {
+                                                    opt.checked = false;
+                                                    opt.dispatchEvent(new Event('change', { bubbles: true }));
+                                                }
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     continue;
                 }
+
+                // Handle radio button groups (multiple-choice questions)
+                if ((el.type || '').toLowerCase() === 'radio') {
+                    const radioGroupName = el.name;
+                    const allOptions = root.querySelectorAll(`input[name="${radioGroupName}"]`);
+                    
+                    if (allOptions.length > 1) {
+                        // Check if we already processed this group by checking ANY option in the group
+                        const anyProcessed = Array.from(allOptions).some(opt => opt.hasAttribute('data-processed-group'));
+                        if (anyProcessed) {
+                            continue;
+                        }
+                        
+                        // Mark all options in this group as processed
+                        allOptions.forEach(opt => opt.setAttribute('data-processed-group', 'true'));
+                        
+                        // Get the question text from the first option
+                        const questionText = getTextBeforeInput(allOptions[0], root);
+                        
+                        // Ask AI for the best answer
+                        const bestAnswer = await this.chooseValueForMultipleChoice(questionText, allOptions, profile);
+                        
+                        if (bestAnswer) {
+                            // Find and select the matching option
+                            const targetOption = Array.from(allOptions).find(opt => 
+                                opt.value.toLowerCase() === bestAnswer.toLowerCase() ||
+                                opt.value.toLowerCase().includes(bestAnswer.toLowerCase()) ||
+                                bestAnswer.toLowerCase().includes(opt.value.toLowerCase())
+                            );
+                            
+                            if (targetOption) {
+                                targetOption.checked = true;
+                                targetOption.dispatchEvent(new Event('change', { bubbles: true }));
+                                filled++;
+                            }
+                        }
+                        continue;
+                    }
+                }
                 const cur = el.isContentEditable ? (el.textContent || '').trim() : (el.value || '').trim();
-                if (cur) continue;
+                if (cur) {
+                    const q = getTextBeforeInput(el, root);
+                    const a = 0;
+                }
     
                 // 🔹 נפילה חזרה למיפוי מתוך פרופיל
-                const val = await this.chooseValueFor(el, profile);
+                const val = await this.chooseValueFor(el, profile, root);
                 if (val) {
                     this.setNative(el, val);
                     filled++;
@@ -2358,6 +2556,25 @@ class LinkedInJobManager {
 
     delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async chooseValueForMultipleChoice(questionText, options, profile, flag_return_index = false) {
+        // Extract all possible answers
+        const possibleAnswers = Array.from(options).map(opt => opt.value);
+        const uderResume = await this.getStoredResumeFile();
+        // Create a prompt for the AI
+        const dateToday = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        const prompt = `Question: ${questionText}\n\nPossible answers: ${possibleAnswers.join(', ')}\n\nBased on the user's profile and the question context, which answer is most appropriate? Please respond with just the answer text. The user's resume is: ${uderResume}. The date today is: ${dateToday}` + (flag_return_index ? `\n\nPlease respond with the index of the answer in the list of possible answers. start from 0.` : '');
+        
+        // Call your AI method (you already have answerWithAI)
+        try {
+            const aiResponse = await this.answerWithAI(prompt);
+            return aiResponse.trim();
+        } catch (error) {
+            console.error('Error getting AI answer for multiple choice:', error);
+            // Fallback: return the first option or null
+            return possibleAnswers[0] || null;
+        }
     }
         // === AI long-answer helpers ===
     isLongAnswerField(field) {
@@ -2385,20 +2602,21 @@ class LinkedInJobManager {
         return regularQuestions.some(q => text.includes(q));
     }
 
-    extractQuestionText(field) {
-            const parts = [];
+    extractQuestionText(field, doc) {
             const aria = field.getAttribute('aria-label') || '';
+            const className = field.getAttribute('className') || '';
+            const name = field.getAttribute('name') || '';
+            const localName = field.getAttribute('localName') || '';
+            const tagName = field.getAttribute('tagName') || '';
+            const type = field.getAttribute('type') || '';
             const ph = field.getAttribute('placeholder') || '';
             const title = field.getAttribute('title') || '';
             const id = field.id ? (field.ownerDocument.querySelector(`label[for="${field.id}"]`)?.textContent || '') : '';
             const wrap = field.closest('label, [role="group"], .form-group, .field, .question, [data-test*="question"], [class*="question" i]');
             const wrapTxt = wrap ? (wrap.textContent || '') : '';
-            [aria, ph, title, id, wrapTxt]
-                .map(t => (t || '').trim())
-                .filter(Boolean)
-                .forEach(t => parts.push(t));
-            const q = parts.join(' ').replace(/\s+/g,' ').trim();
-            return q.slice(0, 600);
+            const inputContext = getTextBeforeInput(field, doc);
+            const text = 'aria: ' + aria + ' className: ' + className + ' name: ' + name + ' localName: ' + localName + ' tagName: ' + tagName + ' type: ' + type + ' ph: ' + ph + ' title: ' + title + ' id: ' + id + ' wrapTxt: ' + wrapTxt + ' inputContext: ' + inputContext;
+            return text
         }
     
     looksLikeGeneralQuestion(text) {
@@ -2441,6 +2659,48 @@ class LinkedInJobManager {
         return null;
     }
 
+    async getStoredCoverLetterFile() {
+        try {
+            const { coverLetterFile } = await chrome.storage.local.get('coverLetterFile');
+            if (coverLetterFile?.base64) {
+                const bstr = atob(coverLetterFile.base64);
+                const u8 = new Uint8Array(bstr.length);
+                for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+                const blob = new Blob([u8], { type: coverLetterFile.type || 'application/pdf' });
+                return new File([blob], coverLetterFile.name || 'cover_letter.pdf', { type: coverLetterFile.type || 'application/pdf' });
+            }
+        } catch (_) {}
+        try {
+            let { coverLetterContent } = await chrome.storage.sync.get('coverLetterContent');
+            if (coverLetterContent && coverLetterContent.trim()) {
+                const blob = new Blob([coverLetterContent], { type: 'text/plain' });
+                return new File([blob], 'cover_letter.txt', { type: 'text/plain' });
+            }
+        } catch (_) {}
+        return null;
+    }   
+
+    async getStoredGradeSheetFile() {
+        try {
+            const { gradeSheetFile } = await chrome.storage.local.get('gradeSheetFile');
+            if (gradeSheetFile?.base64) {
+                const bstr = atob(gradeSheetFile.base64);
+                const u8 = new Uint8Array(bstr.length);
+                for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+                const blob = new Blob([u8], { type: gradeSheetFile.type || 'application/pdf' });
+                return new File([blob], gradeSheetFile.name || 'grade_sheet.pdf', { type: gradeSheetFile.type || 'application/pdf' });
+            }
+        } catch (_) {}
+        try {
+            let { gradeSheetContent } = await chrome.storage.sync.get('gradeSheetContent');
+            if (gradeSheetContent && gradeSheetContent.trim()) {
+                const blob = new Blob([gradeSheetContent], { type: 'text/plain' });
+                return new File([blob], 'grade_sheet.txt', { type: 'text/plain' });
+            }
+        } catch (_) {}  
+        return null;
+    }
+
     // איסוף אלמנטים גם מתוך Shadow DOM
     getAllRoots(doc = document) {
         const roots = [doc];
@@ -2455,160 +2715,317 @@ class LinkedInJobManager {
         return roots;
     }
 
-    findResumeTargets(doc = document) {
+    findFilesTargets(doc = document) {
         const roots = this.getAllRoots(doc);
-        const inputs = [];
-        const zones = [];
-        const triggers = [];
+        const inputs = {
+            'resume': [],
+            'cover_letter': [],
+            'grade_sheet': [],
+            'other': []
+        }
+        const zones = {
+            'resume': [],
+            'cover_letter': [],
+            'grade_sheet': [],
+            'other': []
+        }
+        const triggers = {
+            'resume': [],
+            'cover_letter': [],
+            'grade_sheet': [],
+            'other': []
+        }
 
         const isVisible = this.isVisible.bind(this);
         const textOf = this.textOf.bind(this);
 
+
         for (const root of roots) {
             // קלטי קובץ - Enhanced detection
-            const allFileInputs = Array.from(root.querySelectorAll('input'))
-                .filter(inp => inp.type === 'file' || ['resume', 'cover_letter'].includes(inp.name));
-            
-            // First, try to find resume-specific inputs
+            const allFileInputs_ = Array.from(root.querySelectorAll('input'))
+            const allFileInputs = allFileInputs_.filter(inp => (!inp.className.includes("d-none")));
+            // First, try to find resume-specific inputs with context
             const resumeSpecificInputs = allFileInputs.filter(el => {
-                const t = [
+                const inputContext = getTextBeforeInput(el, doc);
+                const inputText = [
                     el.getAttribute('name') || '',
+                    el.getAttribute('localName') || '',
+                    el.getAttribute('tagName') || '',
                     el.id || '',
                     el.getAttribute('accept') || '',
-                    el.closest('label')?.textContent || '',
                     el.getAttribute('aria-label') || '',
                     el.getAttribute('placeholder') || ''
                 ].join(' ').toLowerCase();
-                return (
-                    /resume|cv|קורות|קובץ קו"ח|curriculum|vitae|attach/.test(t) ||
-                    (el.accept || '').includes('application/pdf') ||
-                    (el.accept || '').includes('.pdf') ||
-                    (el.accept || '').includes('.doc') ||
-                    (el.accept || '').includes('.docx') ||
-                    (el.accept || '').includes('text/') ||
-                    el.accept === '*/*' || 
-                    el.accept === ''
-                );
+                const mustNotInclude = ['cover letter', 'cover', 'letter', 'grade sheet', 'grade', 'sheet', 'grades', 'gradesheet', 'gradesheets', 'grade sheets'];
+                const mustInclude = ['resume', 'cv', 'קורות חיים', 'curriculum', 'vitae'];
+                if (mustNotInclude.some(m => inputText.includes(m))){
+                    return false;
+                }
+                if (mustInclude.some(m => inputText.includes(m))){
+                    return true;
+                }
+                // check if some of the mustInclude are in the inputContext
+                if (mustInclude.some(m => inputContext.includes(m))) {
+                    return true;
+                }
+                return false;
+            });
+
+            const coverLetterSpecificInputs = allFileInputs.filter(el => {
+                const inputContext = getTextBeforeInput(el, doc);
+                const inputText = [
+                    el.getAttribute('name') || '',
+                    el.getAttribute('localName') || '',
+                    el.getAttribute('tagName') || '',
+                    el.getAttribute('accept') || '',
+                    el.getAttribute('aria-label') || '',
+                    el.getAttribute('placeholder') || ''
+                ].join(' ').toLowerCase();
+                const mustNotInclude = ['resume', 'cv', 'קורות חיים', 'curriculum', 'vitae', 'grade sheet', 'grade', 'sheet', 'grades', 'gradesheet', 'gradesheets', 'grade sheets'];
+                const mustInclude = ['cover letter', 'cover', 'letter'];
+                if (mustNotInclude.some(m => inputText.includes(m))){
+                    return false;
+                }
+                if (mustInclude.some(m => inputText.includes(m))){
+                    return true;
+                }
+                // check if some of the mustInclude are in the inputContext
+                if (mustInclude.some(m => inputContext.includes(m))){
+                    return true;
+                }
+                return false;
+            });
+
+            const gradeSheetSpecificInputs = allFileInputs.filter(el => {
+                const inputContext = getTextBeforeInput(el, doc);
+                const inputText = [
+                    el.getAttribute('name') || '',
+                    el.getAttribute('localName') || '',
+                    el.getAttribute('tagName') || '',
+                    el.id || '',
+                    el.getAttribute('accept') || '',
+                    el.getAttribute('aria-label') || '',
+                    el.getAttribute('placeholder') || ''
+                ].join(' ').toLowerCase();
+                const mustNotInclude = ['resume', 'cv', 'קורות חיים', 'curriculum', 'vitae', 'cover letter', 'cover', 'letter'];
+                const mustInclude = ['grade sheet', 'grade', 'sheet', 'grades', 'gradesheet', 'gradesheets', 'grade sheets'];
+                if (mustNotInclude.some(m => inputText.includes(m))){
+                    return false;
+                }
+                if (mustInclude.some(m => inputText.includes(m))){
+                    return true;
+                }
+                // check if some of the mustInclude are in the inputContext
+                if (mustInclude.some(m => inputContext.includes(m))){
+                    return true;
+                }
+                return false;
             });
             
             // If no resume-specific inputs found, include ALL visible file inputs
             if (resumeSpecificInputs.length === 0 && allFileInputs.length > 0) {
                 this.sendDebug(`Found ${allFileInputs.length} generic file inputs - including all as potential resume targets`, 'info');
-                inputs.push(...allFileInputs);
+                inputs['other'].push(...allFileInputs);
             } else {
-                inputs.push(...resumeSpecificInputs);
+                inputs['resume'].push(...resumeSpecificInputs);
             }
 
-            // אזורי Drop וטקסט "Attach Resume" - Enhanced detection
-            const allElements = Array.from(root.querySelectorAll('*')).filter(isVisible);
-            
-            // חיפוש רחב יותר לטקסט "Attach Resume" או דומה
-            const resumeTextElements = allElements.filter(el => {
-                const text = (el.textContent || '').trim();
-                const normalizedText = text.toLowerCase().replace(/\s+/g, ' ');
-                
-                // חיפוש גמיש יותר - הוספת "Choose File" ודפוסים נוספים
-                const resumePatterns = [
-                    /attach\s*resume/i,
-                    /upload\s*resume/i,
-                    /resume\s*upload/i,
-                    /add\s*resume/i,
-                    /browse\s*resume/i,
-                    /choose\s*resume/i,
-                    /select\s*resume/i,
-                    /choose\s*file/i,        // הוספה חדשה
-                    /browse\s*file/i,        // הוספה חדשה
-                    /select\s*file/i,        // הוספה חדשה
-                    /upload\s*file/i,        // הוספה חדשה
-                    /add\s*file/i,           // הוספה חדשה
-                    /^attach$/i,  // רק "Attach"
-                    /^resume$/i,  // רק "Resume"
-                    /^choose\s*file$/i,      // הוספה חדשה
-                    /^browse$/i,             // הוספה חדשה
-                    /^upload$/i,             // הוספה חדשה
-                    /^file$/i,               // הוספה חדשה
-                    /צרף\s*קורות/i,
-                    /העלה\s*קורות/i,
-                    /בחר\s*קובץ/i            // הוספה חדשה בעברית
-                ];
-                
-                const hasResumeText = resumePatterns.some(pattern => pattern.test(normalizedText));
-                
-                // גם אם זה לא בדיוק clickable, אם יש text כזה זה עדיין מעניין
-                if (hasResumeText && text.length < 100) { // הרחבתי מ-50 ל-100
-                    return true;
-                }
-                
-                return false;
-            });
-            
-            zones.push(...resumeTextElements);
+            if (coverLetterSpecificInputs.length === 0 && allFileInputs.length > 0) {
+                this.sendDebug(`Found ${allFileInputs.length} generic file inputs - including all as potential resume targets`, 'info');
+                inputs['other'].push(...allFileInputs);
+            } else {
+                inputs['cover_letter'].push(...coverLetterSpecificInputs);
+            }
 
-            // חיפוש drop zones מסורתיים
-            const dropZoneSel = [
-                '[data-dropzone]', '.dropzone', '[class*="dropzone" i]',
-                '[class*="upload" i]', '[class*="file-upload" i]',
-                '[class*="resume" i]', '[class*="cv" i]',
-                '[aria-label*="resume" i]', '[aria-label*="upload" i]', '[aria-label*="cv" i]',
-                '.file-input-wrapper', '.upload-area', '.attachment-zone',
-                '[class*="attach" i]', '[class*="document" i]', '[class*="file" i]',
-                '[data-upload]', '[data-file]', '[data-attach]', '.drop-area', '.file-drop'
-            ].join(', ');
+            if (gradeSheetSpecificInputs.length === 0 && allFileInputs.length > 0) {
+                this.sendDebug(`Found ${allFileInputs.length} generic file inputs - including all as potential resume targets`, 'info');
+                inputs['other'].push(...allFileInputs);
+            } else {
+                inputs['grade_sheet'].push(...gradeSheetSpecificInputs);
+            }
 
-            const dropZones = Array.from(root.querySelectorAll(dropZoneSel))
-                .filter(isVisible)
-                .filter(el => {
-                    const elementText = textOf(el);
-                    const parentText = textOf(el.parentElement || el);
-                    const combinedText = `${elementText} ${parentText}`;
+
+        //     // אזורי Drop וטקסט "Attach Resume" - Enhanced detection
+        //     const allElements = Array.from(root.querySelectorAll('*')).filter(isVisible);
+            
+        //     // חיפוש רחב יותר לטקסט "Attach Resume" או דומה
+        //     const resumeTextElements = allElements.filter(el => {
+        //         const inputContext = getTextBeforeInput(el, doc);
+        //         const text = (el.textContent || '').trim();
+        //         const normalizedText = text.toLowerCase().replace(/\s+/g, ' ') + ' ' + inputContext.toLowerCase().replace(/\s+/g, ' ');
+                
+        //         // חיפוש גמיש יותר - הוספת "Choose File" ודפוסים נוספים
+        //         const resumePatterns = [
+        //             /attach\s*resume/i,
+        //             /upload\s*resume/i,
+        //             /resume\s*upload/i,
+        //             /add\s*resume/i,
+        //             /browse\s*resume/i,
+        //             /choose\s*resume/i,
+        //             /select\s*resume/i,
+        //             /^resume$/i,  // רק "Resume"
+        //             /צרף\s*קורות/i,
+        //             /העלה\s*קורות/i,
+        //             /בחר\s*קובץ/i            // הוספה חדשה בעברית
+        //         ];
+        //         const hasResumeText = resumePatterns.some(pattern => pattern.test(normalizedText));
+        //         // גם אם זה לא בדיוק clickable, אם יש text כזה זה עדיין מעניין
+        //         if (hasResumeText && text.length < 100) { // הרחבתי מ-50 ל-100
+        //             return true;
+        //         }
+        //         return false;
+        //     });
+            
+        //     const coverLetterTextElements = allElements.filter(el => {
+        //         const inputContext = getTextBeforeInput(el, doc);
+        //         const text = (el.textContent || '').trim();
+        //         const normalizedText = text.toLowerCase().replace(/\s+/g, ' ') + ' ' + inputContext.toLowerCase().replace(/\s+/g, ' ');
+        //         return /cover letter|cover|letter/.test(normalizedText);
+        //     });
+
+        //     const gradeSheetTextElements = allElements.filter(el => {
+        //         const inputContext = getTextBeforeInput(el, doc);
+        //         const text = (el.textContent || '').trim();
+        //         const normalizedText = text.toLowerCase().replace(/\s+/g, ' ') + ' ' + inputContext.toLowerCase().replace(/\s+/g, ' ');
+        //         return /grade sheet|grade|sheet|grades|gradesheet|gradesheets|grade sheets/.test(normalizedText);
+        //     });
+            
+        //     zones['resume'].push(...resumeTextElements);
+        //     zones['cover_letter'].push(...coverLetterTextElements);
+        //     zones['grade_sheet'].push(...gradeSheetTextElements);
+
+        //     // חיפוש drop zones מסורתיים
+        //     const dropZoneSel = [
+        //         '[data-dropzone]', '.dropzone', '[class*="dropzone" i]',
+        //         '[class*="upload" i]', '[class*="file-upload" i]',
+        //         '[class*="resume" i]', '[class*="cv" i]',
+        //         '[aria-label*="resume" i]', '[aria-label*="upload" i]', '[aria-label*="cv" i]',
+        //         '.file-input-wrapper', '.upload-area', '.attachment-zone',
+        //         '[class*="attach" i]', '[class*="document" i]', '[class*="file" i]',
+        //         '[data-upload]', '[data-file]', '[data-attach]', '.drop-area', '.file-drop'
+        //     ].join(', ');
+
+        //     const dropZonesResume = Array.from(root.querySelectorAll(dropZoneSel))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const elementText = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const parentText = textOf(el.parentElement || el);
+        //             const combinedText = `${elementText} ${parentText} ${inputContext}`;
                     
-                    return /attach|upload|drop|browse|choose|select|resume|cv|קורות|צרף|העלה|בחר|drag.*drop|choose.*file|document|file/i.test(combinedText);
-                });
-            zones.push(...dropZones);
+        //             return /|resume|cv|קורות|קובץ קו"ח|curriculum|vitae|cover letter|cover|letter|grade sheet|grade|sheet|grades|gradesheet|gradesheets|grade sheets/.test(combinedText);
+        //         });
+        //     zones['resume'].push(...dropZonesResume);
 
-            // If no specific zones found, look for generic upload-looking areas
-            if (dropZones.length === 0 && resumeTextElements.length === 0) {
-                const genericUploadAreas = Array.from(root.querySelectorAll('div, section, area, span, p'))
-                    .filter(isVisible)
-                    .filter(el => {
-                        const style = getComputedStyle(el);
-                        const hasUploadStyling = style.border?.includes('dashed') || 
-                                               style.border?.includes('dotted') ||
-                                               /upload|drop|file|attach|resume/i.test(el.className);
-                        const hasUploadText = /drag.*drop|upload|choose.*file|select.*file|attach.*resume|resume.*required/i.test(textOf(el));
-                        const isClickableArea = style.cursor === 'pointer' || el.onclick;
-                        
-                        return (hasUploadStyling || hasUploadText || isClickableArea) && textOf(el).length < 200;
-                    });
-                zones.push(...genericUploadAreas);
-            }
+        //     const dropZonesCoverLetter = Array.from(root.querySelectorAll(dropZoneSel))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const elementText = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const parentText = textOf(el.parentElement || el);
+        //             const combinedText = `${elementText} ${parentText} ${inputContext}`;
+                    
+        //             return /|cover letter|cover|letter/.test(combinedText);
+        //         });
+        //     zones['cover_letter'].push(...dropZonesCoverLetter);
 
-            // כפתורים/לינקים שפותחים דיאלוג קובץ - Enhanced detection
-            const uploadTriggers = Array.from(root.querySelectorAll('button, [role="button"], a, label, .btn, .button, input[type="button"], span, div'))
-                .filter(isVisible)
-                .filter(el => {
-                    const elementText = textOf(el);
-                    return /attach\s*resume|upload\s*resume|browse|choose\s*file|select\s*file|add\s*resume|resume|cv|צרף\s*קורות|העלה\s*קורות|בחר\s*קובץ|upload|attach|add.*file|browse.*file|choose.*file|select.*file/i.test(elementText);
-                });
-            triggers.push(...uploadTriggers);
+        //     const dropZonesGradeSheet = Array.from(root.querySelectorAll(dropZoneSel))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const elementText = textOf(el);
+        //             const parentText = textOf(el.parentElement || el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const combinedText = `${elementText} ${parentText} ${inputContext}`;
+                    
+        //             return /|grade sheet|grade|sheet|grades|gradesheet|gradesheets|grade sheets/.test(combinedText);
+        //         });
+        //     zones['grade_sheet'].push(...dropZonesGradeSheet);
 
-            // Look for elements that contain "Resume is required" or similar text
-            const requiredResumeAreas = Array.from(root.querySelectorAll('*'))
-                .filter(isVisible)
-                .filter(el => {
-                    const text = textOf(el);
-                    return /resume\s*is\s*required|resume.*required|required.*resume|צרף.*קורות.*חיים|חובה.*קורות/i.test(text);
-                })
-                .map(el => {
-                    // Look for nearby file inputs or clickable elements
-                    const nearbyInputs = el.parentElement?.querySelectorAll('input[type="file"]') || [];
-                    const nearbyClickables = el.parentElement?.querySelectorAll('[onclick], [role="button"], button, a, span, div') || [];
-                    return [...nearbyInputs, ...nearbyClickables];
-                })
-                .flat()
-                .filter(isVisible);
+        //     // כפתורים/לינקים שפותחים דיאלוג קובץ - Enhanced detection
+        //     const ResumeTriggers = Array.from(root.querySelectorAll('button, [role="button"], a, label, .btn, .button, input[type="button"], span, div'))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const elementText = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const combinedText = `${elementText} ${inputContext}`;
+        //             return /resume|cv|קורות|קובץ קו"ח|curriculum|vitae/.test(combinedText);
+        //         });
+        //     triggers['resume'].push(...ResumeTriggers);
+
+        //     const CoverLetterTriggers = Array.from(root.querySelectorAll('button, [role="button"], a, label, .btn, .button, input[type="button"], span, div'))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const elementText = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const combinedText = `${elementText} ${inputContext}`;
+        //             return /cover letter|cover|letter/.test(combinedText);
+        //         });
+        //     triggers['cover_letter'].push(...CoverLetterTriggers);
+
+        //     const GradeSheetTriggers = Array.from(root.querySelectorAll('button, [role="button"], a, label, .btn, .button, input[type="button"], span, div'))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const elementText = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const combinedText = `${elementText} ${inputContext}`;
+        //             return /grade sheet|grade|sheet|grades|gradesheet|gradesheets|grade sheets/.test(combinedText);
+        //         });
+        //     triggers['grade_sheet'].push(...GradeSheetTriggers);
+
+        //     // Look for elements that contain "Resume is required" or similar text
+        //     const requiredResumeAreas = Array.from(root.querySelectorAll('*'))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const text = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const combinedText = `${text} ${inputContext}`;
+        //             return /resume\s*is\s*required|resume.*required|required.*resume|צרף.*קורות.*חיים|חובה.*קורות/i.test(combinedText);
+        //         })
+        //         .map(el => {
+        //             // Look for nearby file inputs or clickable elements
+        //             const nearbyInputs = el.parentElement?.querySelectorAll('input[type="file"]') || [];
+        //             const nearbyClickables = el.parentElement?.querySelectorAll('[onclick], [role="button"], button, a, span, div') || [];
+        //             return [...nearbyInputs, ...nearbyClickables];
+        //         })
+        //         .flat()
+        //         .filter(isVisible);
             
-            triggers.push(...requiredResumeAreas);
+        //     triggers['resume'].push(...requiredResumeAreas);
+
+        //     const requiredCoverLetterAreas = Array.from(root.querySelectorAll('*'))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const text = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const combinedText = `${text} ${inputContext}`;
+        //             return /cover letter|cover|letter/.test(combinedText);
+        //         })
+        //         .map(el => {
+        //             const nearbyInputs = el.parentElement?.querySelectorAll('input[type="file"]') || [];
+        //             const nearbyClickables = el.parentElement?.querySelectorAll('[onclick], [role="button"], button, a, span, div') || [];
+        //             return [...nearbyInputs, ...nearbyClickables];
+        //         })
+        //         .flat()
+        //         .filter(isVisible);
+        //     triggers['cover_letter'].push(...requiredCoverLetterAreas);
+
+        //     const requiredGradeSheetAreas = Array.from(root.querySelectorAll('*'))
+        //         .filter(isVisible)
+        //         .filter(el => {
+        //             const text = textOf(el);
+        //             const inputContext = getTextBeforeInput(el, doc);
+        //             const combinedText = `${text} ${inputContext}`;
+        //             return /grade sheet|grade|sheet|grades|gradesheet|gradesheets|grade sheets/.test(combinedText);
+        //         })
+        //         .map(el => {
+        //             const nearbyInputs = el.parentElement?.querySelectorAll('input[type="file"]') || [];
+        //             const nearbyClickables = el.parentElement?.querySelectorAll('[onclick], [role="button"], button, a, span, div') || [];
+        //             return [...nearbyInputs, ...nearbyClickables];
+        //         })
+        //         .flat()
+        //         .filter(isVisible);
+        //     triggers['grade_sheet'].push(...requiredGradeSheetAreas);   
+
         }
 
         return { inputs, zones, triggers };
@@ -2817,59 +3234,80 @@ class LinkedInJobManager {
         }
     }
 
-    async attachResumeInDoc(doc = document) {
-        const file = await this.getStoredResumeFile();
-        if (!file) {
-            this.sendDebug('No resume file found in storage', 'warning');
-            return false;
+    async attachFilesInDoc(doc = document) {
+        const files = {'resume': null, 'cover_letter': null, 'grade_sheet': null}
+        files['resume'] = await this.getStoredResumeFile();
+        files['cover_letter'] = await this.getStoredCoverLetterFile();
+        files['grade_sheet'] = await this.getStoredGradeSheetFile();
+        for (const [key, file] of Object.entries(files)) {
+            if (!file) {
+                this.sendDebug(`No ${key} file found in storage`, 'warning');
+                continue;
+            }
         }
-
-        this.sendDebug(`📄 Starting resume attachment: ${file.name} (${file.type}, ${Math.round(file.size/1024)}KB) - No drag-drop mode`, 'info');
-
         // First, try network-based upload as primary method
-        try {
-            this.sendDebug('🌐 Attempting network-based upload first...', 'info');
-            const networkResult = await this.autoUploadResumeNetwork();
-            if (networkResult?.uploaded) {
-                this.sendDebug(`✅ Network-based upload successful!`, 'success');
-                    return true;
-                }
-            } catch (e) {
-            this.sendDebug(`❌ Network upload failed: ${e.message}`, 'warning');
-        }
+        // try {
+        //     this.sendDebug('🌐 Attempting network-based upload first...', 'info');
+        //     const networkResult = await this.autoUploadResumeNetwork();
+        //     if (networkResult?.uploaded) {
+        //         this.sendDebug(`✅ Network-based upload successful!`, 'success');
+        //             return true;
+        //         }
+        //     } catch (e) {
+        //     this.sendDebug(`❌ Network upload failed: ${e.message}`, 'warning');
+        // }
 
-        // Second, try specialized handlers for known ATS platforms
-        const platformResult = await this.tryPlatformSpecificUpload(doc, file);
-        if (platformResult) {
-            this.sendDebug(`✅ Platform-specific upload successful!`, 'success');
-            return true;
-        }
+        // // Second, try specialized handlers for known ATS platforms
+        // const platformResult = await this.tryPlatformSpecificUpload(doc, file);
+        // if (platformResult) {
+        //     this.sendDebug(`✅ Platform-specific upload successful!`, 'success');
+        //     return true;
+        // }
 
-        const { inputs, triggers } = this.findResumeTargets(doc);
-        this.sendDebug(`🔍 Found resume targets: ${inputs.length} inputs, ${triggers.length} triggers (skipping drop zones)`, 'info');
+        const { inputs, zones, triggers } = this.findFilesTargets(doc);
 
         // Try direct file inputs with enhanced approach
-        for (const inp of inputs) {
-            try { 
-                inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+        const uploadFile = async (file, input, doc) => {
+            try {
+                input.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
                 await this.delay(300);
             } catch (_) {}
-            
-            if (await this.attachFileToInput(inp, file)) {
+
+            if (await this.attachFileToInput(input, file)) {
                 this.sendDebug(`✅ Attached resume to file input: ${file.name}`, 'success');
-                // Try to finalize and verify upload
-                await this.finalizeUploadInDoc(doc, inp, file);
+                await this.finalizeUploadInDoc(doc, input, file);
                 return true;
+            }
+            return false;
+        }
+        let resumeAttached = false;
+        let coverLetterAttached = false;
+        let gradeSheetAttached = false;
+        if (files['resume'] && inputs['resume'].length > 0) {
+            resumeAttached = await uploadFile(files['resume'], inputs['resume'][0], doc);
+            if (!resumeAttached && inputs['resume'].length > 1) {
+                resumeAttached = await uploadFile(files['resume'], inputs['resume'][1], doc);
+            }
+        }
+        if (files['cover_letter'] && inputs['cover_letter'].length > 0) {
+            coverLetterAttached = await uploadFile(files['cover_letter'], inputs['cover_letter'][0], doc);
+            if (!coverLetterAttached && inputs['cover_letter'].length > 1) {
+                coverLetterAttached = await uploadFile(files['cover_letter'], inputs['cover_letter'][1], doc);
+            }
+        }
+        if (files['grade_sheet'] && inputs['grade_sheet'].length > 0) {
+            gradeSheetAttached = await uploadFile(files['grade_sheet'], inputs['grade_sheet'][0], doc);
+            if (!gradeSheetAttached && inputs['grade_sheet'].length > 1) {
+                gradeSheetAttached = await uploadFile(files['grade_sheet'], inputs['grade_sheet'][1], doc);
             }
         }
 
-        // Try clicking triggers and use network upload
-        for (const trigger of triggers) {
+        const uploadByTrigger = async (file, trigger, doc) => {
             try {
                 trigger.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 await this.delay(300);
                 trigger.click();
-                this.sendDebug(`📂 Clicked trigger button`, 'info');
+                this.sendDebug(`📂 Clicked trigger button`, 'info');    
                 
                 // After opening dialog, try network fallback
                 await this.delay(500);
@@ -2878,7 +3316,7 @@ class LinkedInJobManager {
                     this.sendDebug('✅ Network fallback after trigger click succeeded', 'success');
                     return true;
                 }
-                
+
                 // Try to find newly created file inputs after trigger click
                 await this.delay(1000);
                 const newInputs = doc.querySelectorAll('input[type="file"]');
@@ -2890,12 +3328,24 @@ class LinkedInJobManager {
                     }
                 }
                 
-                return false; // Manual action may be required
+                return false;
             } catch (_) {}
         }
 
-        this.sendDebug('❌ No working resume attachment method found', 'warning');
-        return false;
+        if (files['resume'] && triggers['resume'].length > 0 && !resumeAttached) {
+            resumeAttached = await uploadByTrigger(files['resume'], triggers['resume'][0], doc);
+        }   
+        if (files['cover_letter'] && triggers['cover_letter'].length > 0 && !coverLetterAttached) {
+            coverLetterAttached = await uploadByTrigger(files['cover_letter'], triggers['cover_letter'][0], doc);
+        }
+        if (files['grade_sheet'] && triggers['grade_sheet'].length > 0 && !gradeSheetAttached) {
+            gradeSheetAttached = await uploadByTrigger(files['grade_sheet'], triggers['grade_sheet'][0], doc);
+        }
+        if (!resumeAttached && !coverLetterAttached && !gradeSheetAttached) {
+            this.sendDebug('❌ No Attachment method found', 'warning'); 
+            return false;
+        }
+        return true;
     }
 
     async tryPlatformSpecificUpload(doc, file) {
@@ -3032,7 +3482,7 @@ class LinkedInJobManager {
         let attached = false;
         
         // Try main document
-        attached = await this.attachResumeInDoc(document) || attached;
+        attached = await this.attachFilesInDoc(document) || attached;
 
         // Try same-origin iframes
         const iframes = Array.from(document.querySelectorAll('iframe')).filter(this.isVisible.bind(this));
@@ -3040,7 +3490,7 @@ class LinkedInJobManager {
             try {
                 const doc = frame.contentDocument || frame.contentWindow?.document;
                 if (doc) {
-                    attached = (await this.attachResumeInDoc(doc)) || attached;
+                    attached = (await this.attachFilesInDoc(doc)) || attached;
                 }
             } catch (_) {
                 // Cross-origin iframe, skip
@@ -3069,7 +3519,7 @@ class LinkedInJobManager {
             // Try submitting again after attachment
             await this.delay(500);
             const submitBtn = Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"]'))
-                .find(btn => /submit|apply|send|הגש|שלח|continue/i.test(this.textOf(btn)));
+                .find(btn => /submit|apply|send|הגש|שלח|continue/i.test(this.textOf(btn)) && !/linkedin|linked in/i.test(this.textOf(btn)));
             
             if (submitBtn) {
                 try {
@@ -3095,7 +3545,7 @@ class LinkedInJobManager {
             this.sendDebug(`   Title: "${document.title}"`, 'info');
             this.sendDebug(`   Domain: ${window.location.hostname}`, 'info');
             
-            const { inputs, zones, triggers } = this.findResumeTargets(document);
+            const { inputs, zones, triggers } = this.findFilesTargets(document);
             
             this.sendDebug(`📊 Scan Results Summary:`, 'info');
             this.sendDebug(`   📁 File inputs: ${inputs.length}`, 'info');
@@ -3389,7 +3839,7 @@ class LinkedInJobManager {
                 this.sendDebug(`❌ Network upload failed: ${e.message}`, 'warning');
             }
 
-            const { inputs, triggers } = this.findResumeTargets(document);
+            const { inputs, triggers } = this.findFilesTargets(document);
             this.sendDebug(`🔍 Found resume targets: ${inputs.length} inputs, ${triggers.length} triggers (skipping drop zones)`, 'info');
 
             let attached = false;
@@ -4393,19 +4843,26 @@ Return your response in JSON format with this structure:
 
     async extractJobFromURLWithAI(url = window.location.href) {
         this.sendDebug(`🌐 Fetching HTML for AI from: ${url}`, 'info');
-        const root = document.querySelector('main') || document.body;
-        const text = (root.innerText || '').trim();
-        this.sendDebug(`🌐 Text: ${text}`, 'info'); 
+      
+        // נסה כמה סלקטורים הגיוניים של דפי משרה
+        const selector = 'main, [role="main"], .posting, .postings-wrapper, .job-details, .application-page, .content';
+        let rootEl;
+        try {
+          rootEl = await waitForElement(selector, { timeout: 6000 });
+        } catch (e) {
+          // אם לא נמצא, קח את האלמנט הגדול ביותר בטקסט, לא את כל ה־body
+          const candidates = Array.from(document.querySelectorAll('main, article, section, .content, .container'))
+            .sort((a, b) => (b.innerText || '').length - (a.innerText || '').length);
+          rootEl = candidates[0] || document.body;
+          this.sendDebug(`🌐 Error waiting for element: ${e?.message || e}`, 'error');
+        }
+      
+        const text = (rootEl.innerText || '').trim();
+        this.sendDebug(`🌐 Text length: ${text.length > 0 ? text.length : 0}`, 'info');
+      
         const llm = await this.extractJobWithLLM(text, url);
-
-        // נחזיר את האובייקט במבנה הקיים אצלכם (עם apply_url)
-        return {
-            ...llm,
-            title: llm?.title || llm?.role || 'Unknown Job',
-            role: llm?.role || llm?.title || null,
-            apply_url: llm?.apply_url || url
-            };
-    }
+        return llm;
+      }
 
 
     // Basic job data extraction as fallback
@@ -5312,7 +5769,7 @@ Return your response in JSON format with this structure:
                 const t = (el.textContent || el.value || el.getAttribute?.('aria-label') || '').trim();
                 if (!t || t.length > 60) return false;
                 const lower = t.toLowerCase();
-                return texts.some(rx => rx.test(lower));
+                return texts.some(rx => rx.test(lower)) && !/linkedin|linked in/i.test(this.textOf(el));
             };
             
             if (relatedInput) {
@@ -5823,22 +6280,23 @@ Return your response in JSON format with this structure:
         }
     }
     // Place near draftNoteWithAI
-async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
+async draftReferralWithAI({ connectionName = '', job = {}, company = '', position_url = '' }) {
     const { profileData = {}, profile = {} } = await chrome.storage.sync.get(['profileData', 'profile']);
     const { geminiApiKey } = await chrome.storage.sync.get('geminiApiKey');
     const hebrewMode = await this.isHebrewMode();
   
     const you = profileData?.name || profile?.fullName || 'me';
-    const role = job.title || job.role || '';
-    const comp = company || job.company || '';
+    let role = job.title || job.role || '';
+    let comp = company || job.company || '';
     const jobLine = [role, comp].filter(Boolean).join(', ');
-
+    if (role == 'Unknown Job') role = '';
+    if (comp == 'Unknown Company') comp = '';
     const systemPrompt = hebrewMode
       ? 'Write the message in Hebrew (עברית). Keep it short, friendly, and practical.'
       : 'Write the message in English. Keep it short, friendly, and practical.';
     const { resumeFile } = await chrome.storage.local.get('resumeFile');
     const resumeBase64 = resumeFile?.base64 || '';
-    const resume_txt = atob(resumeBase64);
+    const resume_txt = await chrome.storage.local.get('resumeContent');
     const userPrompt = `
       You are drafting a short LinkedIn first‑degree connection referral request.
 
@@ -5867,25 +6325,36 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
     // Try Gemini if key exists, else fallback template
     try {
       if (geminiApiKey) {
-        const text = await this.callGeminiText({ apiKey: geminiApiKey, systemPrompt, userPrompt });
-        const cleaned = (text || '').trim();
-        if (cleaned) return cleaned;
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: userPrompt }] }] })
+        });
+        const data = await resp.json().catch(() => null);
+        const text = data?.candidates?.[0]?.content?.parts?.map(p => p.text).join(' ').trim();
+        const position_url_text = 'The job is at ' + position_url;
+        if (text) {
+            if (position_url && text.length + position_url_text.length < 199) {
+                return text + ' ' + position_url_text;
+            }
+            return text.slice(0, 200);
+        }
       }
     } catch(_) {}
   
     // Fallback template
     if (hebrewMode) {
       return connectionName
-        ? `היי ${connectionName}, ראיתי משרה של ${jobLine}. אני בעל ניסיון רלוונטי ורוצה להגיש, אשמח אם תוכל לשקול להפנות אותי או להמליץ, תודה!`
-        : `היי, ראיתי משרה של ${jobLine}. יש לי ניסיון רלוונטי, אשמח שתגיש אותי למשרה, תודה!`;
+        ? `היי ${connectionName}, ראיתי משרה של ${role}. אני בעל ניסיון רלוונטי ורוצה להגיש, אשמח אם תוכל לשקול להפנות אותי או להמליץ, תודה!`
+        : `היי, ראיתי משרה של ${role}. יש לי ניסיון רלוונטי, אשמח שתגיש אותי למשרה, תודה!`;
     }
     return connectionName
-      ? `Hey ${connectionName}, I saw the ${jobLine} role. My background fits well, could you possibly refer or recommend me? Thanks!`
-      : `Hey, I saw the ${jobLine} role. My background fits well, could you possibly refer or recommend me? Thanks!`;
+      ? `Hey ${connectionName}, I saw the ${role} role. My background fits well, could you possibly refer or recommend me? Thanks!`
+      : `Hey, I saw the ${role} role. My background fits well, could you possibly refer or recommend me? Thanks!`;
     }
 
     // content.js
-    async referralScanAndDraft({ company = '', job = {} } = {}) {
+    async referralScanAndDraft({ company = '', job = {} } = {}, position_url = '') {
         this.sendDebug(`🔎 Scanning LinkedIn connections for referrals at "${company}"…`, 'info');
         this.popupShowStatus(`🔎 Scanning connections for "${job.title || ''} at ${job.company || ''}`)
         const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -6010,7 +6479,7 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
           
             let name = txt(nameNode);
             
-            // ניקוי טקסטי נגישות כמו: "View <Name>’s profile" או "See <Name>'s profile"
+            // ניקוי טקסטי נגישות כמו: "View <Name>'s profile" או "See <Name>'s profile"
             name = name
                 .replace(/\b(View|See)\s+.+?[’']s profile\b/gi, '')
                 .replace(/\s{2,}/g, ' ')
@@ -6145,8 +6614,8 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
             const modal = document.querySelector('.artdeco-modal');
             if (!modal) {
               // לא נפתח מודל, ננסה פולבק
-              const drafted = await this.draftReferralWithAI({ Name, job, company });
-              return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'connect', noteSent: false, testMode: true };
+              const drafted = await this.draftReferralWithAI({ Name, job, company, position_url});
+              return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'connect', noteSent: false, submitForm: false };
             }
         
             // מצא Add a note
@@ -6178,7 +6647,7 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
                 ta.dispatchEvent(new Event('input', { bubbles: true }));
                 ta.dispatchEvent(new Event('change', { bubbles: true }));
               };
-            const drafted = await this.draftReferralWithAI({ Name: finalName, job, company });
+            const drafted = await this.draftReferralWithAI({ Name: finalName, job, company, position_url});
             let noteSent = false;
             if (ta) {
               ta.setAttribute('lang', hebrewMode ? 'he' : 'en');
@@ -6192,9 +6661,9 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
               const sendBtn = findSend(ta.closest('.artdeco-modal') || modal || document);
         
               const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-              const testMode = aiAgent?.aiSubmissionMode === true;
+              const submitForm = aiAgent?.aiSubmissionMode;
         
-              if (!testMode) {
+              if (submitForm) {
                 try { sendBtn?.click(); noteSent = !!sendBtn; } catch {}
                 this.sendDebug('🧪 Test Mode: note sent on Connect modal', 'success');
                 this.popupShowStatus(`✅ Live Mode: note filled`);
@@ -6204,11 +6673,11 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
               }
         
               this.sendDebug(`Connect flow, name="${finalName || '(no name)'}", noteSent=${noteSent}`, noteSent ? 'success' : 'info');
-              return { ok: true, drafted, Name: finalName, companyLine, usedAI: true, mode: 'connect', noteSent, testMode };
+              return { ok: true, drafted, Name: finalName, companyLine, usedAI: true, mode: 'connect', noteSent, submitForm };
             }
         
             // ללא textarea, החזר טיוטה בלבד
-            return { ok: true, drafted, Name: finalName, companyLine, usedAI: true, mode: 'connect', noteSent: false, testMode: true };
+            return { ok: true, drafted, Name: finalName, companyLine, usedAI: true, mode: 'connect', noteSent: false, submitForm: false };
           }
           // מקרה B, יש Message
           if (pickedMode === 'message') {
@@ -6222,7 +6691,7 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
         
             const editor = await waitFor(() => findMessageEditor(bubble), 10000);
         
-            const drafted = await this.draftReferralWithAI({ Name, job, company });
+            const drafted = await this.draftReferralWithAI({ Name, job, company, position_url});
             let noteSent = false;
         
             if (editor) {
@@ -6232,14 +6701,14 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
               const finalDraft = hebrewMode ? wrapRTL(drafted) : drafted;
               await fillContentEditable(editor, finalDraft);
               const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-              const testMode = aiAgent?.aiSubmissionMode === true;
+              const submitForm = aiAgent?.aiSubmissionMode;
         
               const sendBtn =
               bubble?.querySelector('button.msg-form__send-button') ||
               bubble?.querySelector('button[aria-label^="Send" i]') ||
               bubble?.querySelector('[data-control-name*="send" i]');
         
-              if (!testMode) {
+              if (submitForm) {
                 try { sendBtn?.click(); noteSent = !!sendBtn; } catch {}
                 this.sendDebug('🧪 Test Mode: message sent', 'success');
                 this.popupShowStatus(`✅ Live Mode: message filled`);
@@ -6249,16 +6718,16 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
               }
         
               this.sendDebug(`Message flow, name="${Name || '(no name)'}", sent=${noteSent}`, noteSent ? 'success' : 'info');
-              return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'message', noteSent, testMode };
+              return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'message', noteSent, submitForm };
             }
         
             // פולבק אם אין עורך
-            return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'message', noteSent: false, testMode: true };
+            return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'message', noteSent: false, submitForm: false };
           }
         
           // פולבק כללי
-          const drafted = await this.draftReferralWithAI({ Name, job, company });
-          return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'unknown', noteSent: false, testMode: true };
+          const drafted = await this.draftReferralWithAI({ Name, job, company, position_url});
+          return { ok: true, drafted, Name, companyLine, usedAI: true, mode: 'unknown', noteSent: false, submitForm: false };
       }
   
 
@@ -6491,7 +6960,7 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
           if (!modal) {
             // לא נפתח מודל, ננסה פולבק
             const drafted = await this.draftNoteWithAI({ recruiterName, job, company });
-            return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'connect', noteSent: false, testMode: true };
+            return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'connect', noteSent: false, submitForm: false };
           }
       
           // מצא Add a note
@@ -6533,10 +7002,10 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
             const sendBtn = findSend(ta.closest('.artdeco-modal') || modal || document);
       
             const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-            const testMode = aiAgent?.aiSubmissionMode === true;
-            this.sendDebug('testMode='+testMode, 'info');
+            const submitForm = aiAgent?.aiSubmissionMode;
+            this.sendDebug('submitForm='+submitForm, 'info');
             this.sendDebug('aiSubmissionMode='+aiAgent?.aiSubmissionMode, 'info');
-            if (!testMode) {
+            if (submitForm) {
               try { sendBtn?.click(); noteSent = !!sendBtn; } catch {}
               this.sendDebug('🧪 Test Mode: note sent on Connect modal', 'success');
               this.popupShowStatus(`✅ Live Mode: note filled and sent`);
@@ -6546,11 +7015,11 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
             }
       
             this.sendDebug(`Connect flow, name="${finalName || '(no name)'}", noteSent=${noteSent}`, noteSent ? 'success' : 'info');
-            return { ok: true, drafted, recruiterName: finalName, companyLine, usedAI: true, mode: 'connect', noteSent, testMode };
+            return { ok: true, drafted, recruiterName: finalName, companyLine, usedAI: true, mode: 'connect', noteSent, submitForm };
           }
       
           // ללא textarea, החזר טיוטה בלבד
-          return { ok: true, drafted, recruiterName: finalName, companyLine, usedAI: true, mode: 'connect', noteSent: false, testMode: true };
+          return { ok: true, drafted, recruiterName: finalName, companyLine, usedAI: true, mode: 'connect', noteSent: false, submitForm: false };
         }
       
         // מקרה B, יש Message
@@ -6571,14 +7040,14 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
             const finalDraft = hebrewMode ? wrapRTL(drafted) : drafted;
             await fillContentEditable(editor, finalDraft);
             const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-            const testMode = aiAgent?.aiSubmissionMode === true;
+            const submitForm = aiAgent?.aiSubmissionMode;
       
             const sendBtn =
               bubble?.querySelector('button.msg-form__send-button') ||
               bubble?.querySelector('button[aria-label^="Send" i]') ||
               bubble?.querySelector('[data-control-name*="send" i]');
       
-            if (!testMode) {
+            if (submitForm) {
               try { sendBtn?.click(); noteSent = !!sendBtn; } catch {}
               this.sendDebug('🧪 Test Mode: message sent', 'success');
               this.popupShowStatus(`✅ Live Mode: message filled and sent`);
@@ -6588,16 +7057,16 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
             }
       
             this.sendDebug(`Message flow, name="${recruiterName || '(no name)'}", sent=${noteSent}`, noteSent ? 'success' : 'info');
-            return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'message', noteSent, testMode };
+            return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'message', noteSent, submitForm };
           }
       
           // פולבק אם אין עורך
-          return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'message', noteSent: false, testMode: true };
+          return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'message', noteSent: false, submitForm: false };
         }
       
         // פולבק כללי
         const drafted = await this.draftNoteWithAI({ recruiterName, job, company });
-        return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'unknown', noteSent: false, testMode: true };
+        return { ok: true, drafted, recruiterName, companyLine, usedAI: true, mode: 'unknown', noteSent: false, submitForm: false };
     }
       
     popupShowStatus(text = 'Working…') {
@@ -6626,23 +7095,47 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
             this.sendDebug('🧪 Test mode: answerWithAI', 'info');
             this.sendDebug('question='+question, 'info');
           const resumeData = await this.getResumeForAI();
-          const res = await new Promise((resolve) => {
-            try {
-              chrome.runtime.sendMessage(
-                { action: 'generateAIAnswer', question, resumeData },
-                (r) => resolve(r && r.success ? r.answer : null)
-              );
-            } catch (_) { resolve(null); }
-          });
+          const res = await this.generateAIAnswer(question, resumeData);
           return res;
         } catch (_) {
           return null;
         }
     }
       
-      
+    async generateAIAnswer(question, resumeData) {
+        const { aiAgent } = await chrome.storage.sync.get('aiAgent');
+        const geminiApiKey = aiAgent?.geminiApiKey || '';
+        if (!geminiApiKey) return { success: false, error: 'Missing Gemini API key' };
+    
+        const prompt = `
+    You are a professional job application assistant, you are given a field information and a resume.
+    You need to undersatend what the field is for (from the field info), and what is the expected answer (from the Resume).
+    'Text' : ${question}
+    
+    RESUME:
+    ${resumeData}
+    
+    Write a concise, professional answer, in the same language as the question.
+    Only the answer text. 
+    if the field is a information field, just return the information from the resume. do not make up an answer.
+    if the field is a general question field, answer the question.
+        `.trim();
+    
+        const model = 'gemini-2.0-flash';
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+    
+        if (!resp.ok) return { success: false, error: `Gemini HTTP ${resp.status}` };
+        const data = await resp.json();
+        const answer = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+        return answer;
+    }
+
     async getResumeForAI() {
-        // ננסה קודם קובץ טקסט של קו״ח, אחרת נבנה מ‑profile
+        // ננסה קודם קובץ טקסט של קו״ח, אחרת נבנה מּprofile
         try {
           let { resumeContent } = await chrome.storage.sync.get('resumeContent');
           if (!resumeContent) {
@@ -6653,7 +7146,7 @@ async draftReferralWithAI({ connectionName = '', job = {}, company = '' }) {
       
           const { profile, profileData } = await chrome.storage.sync.get(['profile', 'profileData']);
           const p = profileData || profile || {};
-          // תקציר נחמד ל‑AI:
+          // תקציר נחמד לּAI:
           const lines = [
             p.fullName && `Name: ${p.fullName}`,
             p.email && `Email: ${p.email}`,
@@ -6699,7 +7192,14 @@ function textOf(el) {
       .map(n => (n.nodeValue || '').trim())
       .filter(Boolean)
       .join(' ');
-    if (direct) parts.push(direct);
+    let some_part_contain_direct = false;
+    for (const p of parts) {
+      if (p.includes(direct)) {
+        some_part_contain_direct = true;
+        break;
+      }
+    }
+    if (direct && !some_part_contain_direct) parts.push(direct);
   
     // normalize
     return parts.join(' ').replace(/\s+/g, ' ').trim();
@@ -6782,22 +7282,6 @@ function isLongAnswerField(field) {
     return tag === 'textarea' || (type === 'text' && (field.maxLength || 500) >= 200);
 }
   
-function extractQuestionText(field) {
-    const parts = [];
-    const aria = field.getAttribute('aria-label') || '';
-    const ph = field.getAttribute('placeholder') || '';
-    const title = field.getAttribute('title') || '';
-    const id = field.id ? (field.ownerDocument.querySelector(`label[for="${field.id}"]`)?.textContent || '') : '';
-    const wrap = field.closest('label, [role="group"], .form-group, .field, .question, [data-test*="question"], [class*="question" i]');
-    const wrapTxt = wrap ? (wrap.textContent || '') : '';
-    [aria, ph, title, id, wrapTxt]
-        .map(t => (t || '').trim())
-        .filter(Boolean)
-        .forEach(t => parts.push(t));
-    const q = parts.join(' ').replace(/\s+/g,' ').trim();
-    return q.slice(0, 600);
-}
-  
 function looksLikeGeneralQuestion(text) {
     const t = (text || '').toLowerCase();
     // אנגלית + עברית
@@ -6809,3 +7293,72 @@ function looksLikeGeneralQuestion(text) {
     const finish_with_question_mark = /[\?؟]$/.test(t);
     return cues.some(k => t.includes(k)) || finish_with_question_mark || t.length > 40; // יחסית פתוח/ארוך
 }
+
+
+
+// Helper function to extract text before an input element
+function getTextBeforeInput(input, doc) {
+    let contextText = '';
+    
+    // Look for label element
+    const label = input.closest('label') || 
+                    (input.id && doc.querySelector(`label[for="${input.id}"]`));
+    if (label) {
+        contextText += ' ' + textOf(label);
+    }
+    
+    // Look for previous sibling text
+    let prevSibling = input.previousElementSibling;
+    while (prevSibling && contextText.length < 200) {
+        if (prevSibling.nodeType === Node.TEXT_NODE) {
+            contextText = prevSibling.textContent.trim() + ' ' + contextText;
+        } else if (prevSibling.nodeType === Node.ELEMENT_NODE) {
+            const tagName = prevSibling.tagName.toLowerCase();
+            if (['p', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+                pre_text = textOf(prevSibling);
+                if ((pre_text.length > 0) && (!contextText.includes(pre_text))) {
+                    contextText = pre_text + ' ' + contextText;
+                }
+            }
+        }
+        prevSibling = prevSibling.previousElementSibling;
+    }
+    
+    // Look for parent text
+    let parent = input.parentElement;
+    let levels = 0;
+    while (parent && levels < 7 && contextText.length < 50) {
+        const parentText = textOf(parent);
+        if (parentText && parentText.length > 0) {
+            if (!contextText.includes(parentText)) {
+                contextText = parentText + ' ' + contextText;
+            }
+        }
+        parent = parent.parentElement;
+        levels++;
+    }
+    
+    return contextText.trim();
+};
+
+function waitForElement(selector, { timeout = 6000, root = document } = {}) {
+    return new Promise((resolve, reject) => {
+      const found = root.querySelector(selector);
+      if (found) return resolve(found);
+  
+      const observer = new MutationObserver(() => {
+        const el = root.querySelector(selector);
+        if (el) {
+          observer.disconnect();
+          resolve(el);
+        }
+      });
+      observer.observe(root, { childList: true, subtree: true });
+  
+      setTimeout(() => {
+        observer.disconnect();
+        reject(new Error(`Timeout waiting for ${selector}`));
+      }, timeout);
+    });
+  }
+  

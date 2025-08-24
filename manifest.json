@@ -22,7 +22,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["ai_agent.js", "content.js", "simple-popup.js", "popup.js", "background.js", "settings.js"],
+      "js": ["ai_agent.js", "content.js"],
       "run_at": "document_end",
       "all_frames": true
     }

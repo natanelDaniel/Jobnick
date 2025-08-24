@@ -10,6 +10,7 @@ class PopupManager {
     init() {
         this.setupTabSwitching();
         this.setupFormHandling();
+        this.setupEventListeners(); // Add this line to set up toggle event listeners
         // Removed automation controls
         this.loadSavedData();
         this.startStatusUpdates();
@@ -18,6 +19,11 @@ class PopupManager {
         this.setupHistoryControls();
         this.renderHistoryTable();
         this.refreshAiApplicationsFromHistory();
+        
+        // Ensure file displays are shown after a short delay to allow DOM to be ready
+        setTimeout(() => {
+            this.refreshAllFileDisplays();
+        }, 500);
     }
 
     setupAIStatusListener() {
@@ -204,10 +210,144 @@ class PopupManager {
                     
                     // Update resume file status in AI tab
                     this.updateResumeFileStatus();
+                    
+                    // Display the file info immediately
+                    this.displayResumeFileInfo({
+                        name: file.name,
+                        size: file.size,
+                        type: file.type
+                    });
                 } catch (e) { console.warn('Failed to read resume file', e); }
             });
         }
 
+        const coverLetterFileInput = document.getElementById('coverLetterFile');
+        if (coverLetterFileInput) {
+            coverLetterFileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        let text = '';
+                        
+                        // Handle different file types
+                        const isPdf = (file.type === 'application/pdf') || file.name.toLowerCase().endsWith('.pdf');
+                        if (isPdf) {
+                            this.logDebug('PDF cover letter detected. Extracting text using Gemini...', 'info');
+                            try {
+                                text = await this.extractPdfTextWithGemini(file);
+                            } catch (err) {
+                                const fallback = await file.text();
+                                if (!fallback || fallback.length < 50) {
+                                    this.logDebug(`PDF extraction failed (${err?.message || err}). Please set your API key and re-upload to extract PDF text properly.`, 'warning');
+                                    this.showNotification('Set your Gemini API key in AI Agent tab, then re-upload the PDF cover letter to extract text', 'warning');
+                                    return;
+                                }
+                                this.logDebug(`PDF extraction failed: ${err?.message || err}. Saved fallback raw text.`, 'warning');
+                                text = fallback;
+                            }
+                        } else {
+                            text = await file.text();
+                        }
+                        
+                        // Save text content for AI analysis
+                        await chrome.storage.local.set({ coverLetterContent: text });
+                        
+                        // Save binary file data for automatic attachment during applications
+                        try {
+                            const buf = await file.arrayBuffer();
+                            const base64 = this.arrayBufferToBase64(buf);
+                            const meta = { 
+                                name: file.name || 'cover_letter.txt', 
+                                type: file.type || 'text/plain', 
+                                base64 
+                            };
+                            await chrome.storage.local.set({ coverLetterFile: meta });
+                            this.logDebug(`Saved cover letter file locally: ${meta.name}, ${meta.type}, size ${buf.byteLength} bytes`, 'success');
+                        } catch (e) {
+                            this.logDebug(`Failed saving cover letter file: ${e?.message || e}`, 'error');
+                        }
+                        
+                        this.logDebug(`Saved cover letter content (${(text || '').length} chars) from ${file.name}`, 'success');
+                        this.updateCoverLetterFileStatus();
+                        
+                        // Display the file info immediately
+                        this.displayCoverLetterFileInfo({
+                            name: file.name,
+                            size: file.size,
+                            type: file.type
+                        });
+                    } catch (e) { 
+                        console.warn('Failed to read cover letter file', e);
+                        this.logDebug(`Failed to process cover letter file: ${e?.message || e}`, 'error');
+                    }
+                } 
+            });
+        }   
+        
+        const gradeSheetFileInput = document.getElementById('gradeSheetFile');
+
+        if (gradeSheetFileInput) {
+            gradeSheetFileInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    try {
+                        let text = '';
+                        
+                        // Handle different file types
+                        const isPdf = (file.type === 'application/pdf') || file.name.toLowerCase().endsWith('.pdf');
+                        if (isPdf) {
+                            this.logDebug('PDF grade sheet detected. Extracting text using Gemini...', 'info');
+                            try {
+                                text = await this.extractPdfTextWithGemini(file);
+                            } catch (err) {
+                                const fallback = await file.text();
+                                if (!fallback || fallback.length < 50) {
+                                    this.logDebug(`PDF extraction failed (${err?.message || err}). Please set your API key and re-upload to extract PDF text properly.`, 'warning');
+                                    this.showNotification('Set your Gemini API key in AI Agent tab, then re-upload the PDF grade sheet to extract text', 'warning');
+                                    return;
+                                }
+                                this.logDebug(`PDF extraction failed: ${err?.message || err}. Saved fallback raw text.`, 'warning');
+                                text = fallback;
+                            }
+                        } else {
+                            text = await file.text();
+                        }
+                        
+                        // Save text content for AI analysis
+                        await chrome.storage.local.set({ gradeSheetContent: text });
+                        
+                        // Save binary file data for automatic attachment during applications
+                        try {
+                            const buf = await file.arrayBuffer();
+                            const base64 = this.arrayBufferToBase64(buf);
+                            const meta = { 
+                                name: file.name || 'grade_sheet.txt', 
+                                type: file.type || 'text/plain', 
+                                base64 
+                            };
+                            await chrome.storage.local.set({ gradeSheetFile: meta });
+                            this.logDebug(`Saved grade sheet file locally: ${meta.name}, ${meta.type}, size ${buf.byteLength} bytes`, 'success');
+                        } catch (e) {
+                            this.logDebug(`Failed saving grade sheet file: ${e?.message || e}`, 'error');
+                        }
+                        
+                        this.logDebug(`Saved grade sheet content (${(text || '').length} chars) from ${file.name}`, 'success');
+                        this.updateGradeSheetFileStatus();
+                        
+                        // Display the file info immediately
+                        this.displayGradeSheetFileInfo({
+                            name: file.name,
+                            size: file.size,
+                            type: file.type
+                        });
+                    } catch (e) { 
+                        console.warn('Failed to read grade sheet file', e);
+                        this.logDebug(`Failed to process grade sheet file: ${e?.message || e}`, 'error');
+                    }
+                } 
+            });
+        }
+        
         // Listen to storage changes to refresh the form/status if updated elsewhere
         chrome.storage.onChanged.addListener((changes, area) => {
             if (area !== 'sync' && area !== 'local') return;
@@ -327,7 +467,8 @@ class PopupManager {
             currentCompany: document.getElementById('currentCompany').value,
             linkedinUrl: document.getElementById('linkedinUrl').value,
             resumeFile: this.getResumeFileInfo(),
-            coverLetterFile: this.getCoverLetterFileInfo()
+            coverLetterFile: this.getCoverLetterFileInfo(),
+            gradeSheetFile: this.getGradeSheetFileInfo()
         };
 
         try {
@@ -367,6 +508,20 @@ class PopupManager {
         return null;
     }
 
+    getGradeSheetFileInfo() {
+        const fileInput = document.getElementById('gradeSheetFile');
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            return {
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: file.lastModified
+            };
+        }
+        return null;    
+    }
+
     async savePreferencesData() {
         const preferencesData = {
             jobTitles: document.getElementById('jobTitles').value,
@@ -391,9 +546,9 @@ class PopupManager {
     async saveAIAgentData() {
         const aiAgentData = {
             geminiApiKey: document.getElementById('geminiApiKey')?.value || '',
-            aiSearchDelay: parseInt(document.getElementById('aiSearchDelay')?.value) || 30,
-            aiConfidenceThreshold: parseFloat(document.getElementById('aiConfidenceThreshold')?.value) || 0.7,
-            maxDailyAIApplications: parseInt(document.getElementById('maxDailyAIApplications')?.value) || 15,
+            aiSubmissionMode: document.getElementById('aiSubmissionMode')?.checked, // Default to false (Test Mode)
+            hebrewMessages: document.getElementById('hebrewMessages')?.checked === true,     // Default to false (English)
+            
             _lastSavedAt: Date.now()
         };
 
@@ -649,6 +804,38 @@ class PopupManager {
         });
     }
 
+    updateCoverLetterFileStatus() {
+        chrome.storage.local.get('coverLetterFile', (result) => {
+            const coverLetterFileStatusEl = document.getElementById('coverLetterFileStatus');
+            if (!coverLetterFileStatusEl) return;
+
+            if (result.coverLetterFile?.name) {
+                const sizeKB = result.coverLetterFile.base64 ? Math.round(result.coverLetterFile.base64.length * 0.75 / 1024) : 0;
+                coverLetterFileStatusEl.textContent = `${result.coverLetterFile.name} (${sizeKB}KB)`;
+                coverLetterFileStatusEl.className = 'status-value status-success';
+            } else {
+                coverLetterFileStatusEl.textContent = 'Not uploaded';
+                coverLetterFileStatusEl.className = 'status-value status-error';
+            }
+        });
+    }
+
+    updateGradeSheetFileStatus() {
+        chrome.storage.local.get('gradeSheetFile', (result) => {
+            const gradeSheetFileStatusEl = document.getElementById('gradeSheetFileStatus');
+            if (!gradeSheetFileStatusEl) return;
+            
+            if (result.gradeSheetFile?.name) {
+                const sizeKB = result.gradeSheetFile.base64 ? Math.round(result.gradeSheetFile.base64.length * 0.75 / 1024) : 0;
+                gradeSheetFileStatusEl.textContent = `${result.gradeSheetFile.name} (${sizeKB}KB)`;
+                gradeSheetFileStatusEl.className = 'status-value status-success';
+            } else {
+                gradeSheetFileStatusEl.textContent = 'Not uploaded';
+                gradeSheetFileStatusEl.className = 'status-value status-error';
+            }
+        });
+    }
+
     async loadSavedData() {
         try {
             // Try sync first
@@ -684,12 +871,108 @@ class PopupManager {
             } else {
                 // Even if no aiAgent object, status might be known by flat key
                 this.updateAPIKeyStatus(result.geminiApiKey || '');
+                
+                // Set default AI Agent settings if none exist
+                this.setDefaultAIAgentSettings();
             }
             
             // Update resume file status
             this.updateResumeFileStatus();
+            this.updateCoverLetterFileStatus();
+            this.updateGradeSheetFileStatus();
+            
+            // Refresh all file displays to ensure they show correctly
+            this.refreshAllFileDisplays();
         } catch (error) {
             console.error('Error loading saved data:', error);
+        }
+    }
+
+    setDefaultAIAgentSettings() {
+        // Set default values for AI Agent settings when none exist
+        const aiSubmissionModeField = document.getElementById('aiSubmissionMode');
+        const hebrewMessagesField = document.getElementById('hebrewMessages');
+        
+        if (aiSubmissionModeField && aiSubmissionModeField.checked === undefined) {
+            // Default to false (Test Mode) - safer for new users
+            aiSubmissionModeField.checked = false;
+            this.updateToggleStatus(false);
+            this.updateToggleMainText(false);
+        }
+        
+        if (hebrewMessagesField && hebrewMessagesField.checked === undefined) {
+            // Default to false (English) - more universal
+            hebrewMessagesField.checked = false;
+            this.updateHebrewToggleStatus(false);
+            this.updateHebrewToggleMainText(false);
+        }
+    }
+
+    refreshAllFileDisplays() {
+        // Refresh resume display
+        chrome.storage.local.get('resumeFile', (result) => {
+            if (result.resumeFile) {
+                this.displayResumeFileInfo({
+                    name: result.resumeFile.name,
+                    size: result.resumeFile.base64 ? Math.round(result.resumeFile.base64.length * 0.75) : 0,
+                    type: result.resumeFile.type
+                });
+            }
+        });
+        
+        // Refresh cover letter display
+        chrome.storage.local.get('coverLetterFile', (result) => {
+            if (result.coverLetterFile) {
+                this.displayCoverLetterFileInfo({
+                    name: result.coverLetterFile.name,
+                    size: result.coverLetterFile.base64 ? Math.round(result.coverLetterFile.base64.length * 0.75) : 0,
+                    type: result.coverLetterFile.type
+                });
+            }
+        });
+        
+        // Refresh grade sheet display
+        chrome.storage.local.get('gradeSheetFile', (result) => {
+            if (result.gradeSheetFile) {
+                this.displayGradeSheetFileInfo({
+                    name: result.gradeSheetFile.name,
+                    size: result.gradeSheetFile.base64 ? Math.round(result.gradeSheetFile.base64.length * 0.75) : 0,
+                    type: result.gradeSheetFile.type
+                });
+            }
+        });
+        
+        // Refresh API key status display
+        this.refreshAPIKeyStatus();
+    }
+
+    async refreshAPIKeyStatus() {
+        try {
+            // Try to get API key from both sync and local storage
+            let apiKey = '';
+            const sync = await chrome.storage.sync.get(['geminiApiKey', 'aiAgent']);
+            const local = await chrome.storage.local.get(['geminiApiKey', 'aiAgent']);
+            
+            apiKey = sync?.geminiApiKey?.trim() 
+                || sync?.aiAgent?.geminiApiKey?.trim() 
+                || local?.geminiApiKey?.trim() 
+                || local?.aiAgent?.geminiApiKey?.trim() 
+                || '';
+            
+            if (apiKey) {
+                this.displayAPIKeyStatus({
+                    key: apiKey,
+                    status: 'configured'
+                });
+                
+                // Also update the field value if it's empty
+                const apiKeyField = document.getElementById('geminiApiKey');
+                if (apiKeyField && !apiKeyField.value.trim()) {
+                    apiKeyField.value = apiKey;
+                }
+            }
+        } catch (e) {
+            console.warn('Error refreshing API key status:', e);
         }
     }
 
@@ -715,28 +998,72 @@ class PopupManager {
     populateProfileForm(profile) {
         Object.keys(profile).forEach(key => {
             const element = document.getElementById(key);
-            if (element && key !== 'resumeFile' && key !== 'coverLetterFile' && key !== 'resume' && key !== 'coverLetter') {
+            if (element && key !== 'resumeFile' && key !== 'coverLetterFile' && key !== 'gradeSheetFile' && key !== 'resume' && key !== 'coverLetter' && key !== 'gradeSheet') {
                 element.value = profile[key];
             }
         });
         
-        // Handle resume file info display
+        // Handle resume file info display - check both profile and storage
         if (profile.resumeFile) {
             this.displayResumeFileInfo(profile.resumeFile);
+        } else {
+            // Try to get from storage if not in profile
+            chrome.storage.local.get('resumeFile', (result) => {
+                if (result.resumeFile) {
+                    this.displayResumeFileInfo({
+                        name: result.resumeFile.name,
+                        size: result.resumeFile.base64 ? Math.round(result.resumeFile.base64.length * 0.75) : 0,
+                        type: result.resumeFile.type
+                    });
+                }
+            });
         }
         
-        // Handle cover letter file info display
+        // Handle cover letter file info display - check both profile and storage
         if (profile.coverLetterFile) {
             this.displayCoverLetterFileInfo(profile.coverLetterFile);
+        } else {
+            // Try to get from storage if not in profile
+            chrome.storage.local.get('coverLetterFile', (result) => {
+                if (result.coverLetterFile) {
+                    this.displayCoverLetterFileInfo({
+                        name: result.coverLetterFile.name,
+                        size: result.coverLetterFile.base64 ? Math.round(result.coverLetterFile.base64.length * 0.75) : 0,
+                        type: result.coverLetterFile.type
+                    });
+                }
+            });
+        }
+
+        // Handle grade sheet file info display - check both profile and storage
+        if (profile.gradeSheetFile) {
+            this.displayGradeSheetFileInfo(profile.gradeSheetFile);
+        } else {
+            // Try to get from storage if not in profile
+            chrome.storage.local.get('gradeSheetFile', (result) => {
+                if (result.gradeSheetFile) {
+                    this.displayGradeSheetFileInfo({
+                        name: result.gradeSheetFile.name,
+                        size: result.gradeSheetFile.base64 ? Math.round(result.gradeSheetFile.base64.length * 0.75) : 0,
+                        type: result.gradeSheetFile.type
+                    });
+                }
+            });
         }
     }
 
     displayResumeFileInfo(fileInfo) {
         const fileInput = document.getElementById('resumeFile');
         if (fileInfo && fileInfo.name) {
+            // Remove any existing resume display box only
+            const existingDisplay = fileInput.parentNode.querySelector('.file-display.resume-display');
+            if (existingDisplay) {
+                existingDisplay.remove();
+            }
+            
             // Create a display element for the uploaded file
             const fileDisplay = document.createElement('div');
-            fileDisplay.className = 'file-display';
+            fileDisplay.className = 'file-display resume-display';
             fileDisplay.innerHTML = `
                 <span class="file-name">📄 ${fileInfo.name}</span>
                 <small class="file-size">(${this.formatFileSize(fileInfo.size)})</small>
@@ -750,11 +1077,39 @@ class PopupManager {
     displayCoverLetterFileInfo(fileInfo) {
         const fileInput = document.getElementById('coverLetterFile');
         if (fileInfo && fileInfo.name) {
+            // Remove any existing cover letter display box only
+            const existingDisplay = fileInput.parentNode.querySelector('.file-display.cover-letter-display');
+            if (existingDisplay) {
+                existingDisplay.remove();
+            }
+            
             // Create a display element for the uploaded file
             const fileDisplay = document.createElement('div');
             fileDisplay.className = 'file-display cover-letter-display';
             fileDisplay.innerHTML = `
                 <span class="file-name">📝 ${fileInfo.name}</span>
+                <small class="file-size">(${this.formatFileSize(fileInfo.size)})</small>
+            `;
+            
+            // Insert after the file input
+            fileInput.parentNode.insertBefore(fileDisplay, fileInput.nextSibling);
+        }
+    }
+
+    displayGradeSheetFileInfo(fileInfo) {
+        const fileInput = document.getElementById('gradeSheetFile');
+        if (fileInfo && fileInfo.name) {
+            // Remove any existing grade sheet display box only
+            const existingDisplay = fileInput.parentNode.querySelector('.file-display.grade-sheet-display');
+            if (existingDisplay) {
+                existingDisplay.remove();
+            }
+            
+            // Create a display element for the uploaded file
+            const fileDisplay = document.createElement('div');
+            fileDisplay.className = 'file-display grade-sheet-display';
+            fileDisplay.innerHTML = `
+                <span class="file-name">📊 ${fileInfo.name}</span>
                 <small class="file-size">(${this.formatFileSize(fileInfo.size)})</small>
             `;
             
@@ -811,18 +1166,68 @@ class PopupManager {
 
     populateAIAgentForm(aiAgent) {
         const geminiApiKeyField = document.getElementById('geminiApiKey');
-        const aiSearchDelayField = document.getElementById('aiSearchDelay');
-        const aiConfidenceThresholdField = document.getElementById('aiConfidenceThreshold');
-        const maxDailyAIApplicationsField = document.getElementById('maxDailyAIApplications');
+        const aiSubmissionModeField = document.getElementById('aiSubmissionMode');
+        const hebrewMessagesField = document.getElementById('hebrewMessages');
 
         if (geminiApiKeyField && aiAgent.geminiApiKey) geminiApiKeyField.value = aiAgent.geminiApiKey;
-        if (aiSearchDelayField && aiAgent.aiSearchDelay !== undefined) aiSearchDelayField.value = parseInt(aiAgent.aiSearchDelay);
-        if (aiConfidenceThresholdField && aiAgent.aiConfidenceThreshold !== undefined) aiConfidenceThresholdField.value = parseFloat(aiAgent.aiConfidenceThreshold);
-        if (maxDailyAIApplicationsField && aiAgent.maxDailyAIApplications !== undefined) maxDailyAIApplicationsField.value = parseInt(aiAgent.maxDailyAIApplications);
+        if (aiSubmissionModeField) {
+            // Default to false (Test Mode) if not set
+            aiSubmissionModeField.checked = aiAgent.aiSubmissionMode;
+            // Update both the toggle status display and main text
+            this.updateToggleStatus(aiSubmissionModeField.checked);
+            this.updateToggleMainText(aiSubmissionModeField.checked);
+        }
+        if (hebrewMessagesField) {
+            // Default to false (English) if not set
+            hebrewMessagesField.checked = aiAgent.hebrewMessages === true;
+            // Update both the toggle status display and main text
+            this.updateHebrewToggleStatus(hebrewMessagesField.checked);
+            this.updateHebrewToggleMainText(hebrewMessagesField.checked);
+        }
 
         // Update API key status and hide warnings when configured
         this.updateAPIKeyStatus(aiAgent.geminiApiKey);
         if (aiAgent.geminiApiKey && aiAgent.geminiApiKey.trim() !== '') this.hideWarningBanners();
+        
+        // Display API key status box if API key exists
+        if (aiAgent.geminiApiKey && aiAgent.geminiApiKey.trim() !== '') {
+            this.displayAPIKeyStatus({
+                key: aiAgent.geminiApiKey,
+                status: 'configured'
+            });
+        }
+    }
+
+    displayAPIKeyStatus(apiKeyInfo) {
+        const apiKeyField = document.getElementById('geminiApiKey');
+        if (!apiKeyField || !apiKeyInfo.key) return;
+        
+        // Remove any existing API key status display box
+        const existingDisplay = apiKeyField.parentNode.querySelector('.api-key-status-display');
+        if (existingDisplay) {
+            existingDisplay.remove();
+        }
+        
+        // Create a display element for the API key status
+        const statusDisplay = document.createElement('div');
+        statusDisplay.className = 'api-key-status-display';
+        
+        // Mask the API key for security (show only first 8 and last 4 characters)
+        const maskedKey = this.maskAPIKey(apiKeyInfo.key);
+        
+        statusDisplay.innerHTML = `
+            <span class="status-icon">🔑</span>
+            <span class="status-text">API Key Configured</span>
+            <small class="key-preview">${maskedKey}</small>
+        `;
+        
+        // Insert after the API key input field
+        apiKeyField.parentNode.insertBefore(statusDisplay, apiKeyField.nextSibling);
+    }
+
+    maskAPIKey(apiKey) {
+        if (!apiKey || apiKey.length < 12) return '••••••••';
+        return `${apiKey.substring(0, 8)}••••${apiKey.substring(apiKey.length - 4)}`;
     }
 
     hideWarningBanners() {
@@ -1023,10 +1428,25 @@ async testGeminiAPI() {
             
             // Hide warning banners when API key is configured
             this.hideWarningBanners();
+            
+            // Display the API key status box
+            this.displayAPIKeyStatus({
+                key: apiKey,
+                status: 'configured'
+            });
         } else {
             statusElement.textContent = 'Not configured ✗';
             statusElement.style.color = '#dc3545';
             statusElement.style.fontWeight = '600';
+            
+            // Remove the API key status box if no key
+            const apiKeyField = document.getElementById('geminiApiKey');
+            if (apiKeyField) {
+                const existingDisplay = apiKeyField.parentNode.querySelector('.api-key-status-display');
+                if (existingDisplay) {
+                    existingDisplay.remove();
+                }
+            }
         }
     }
 
@@ -1426,7 +1846,7 @@ async testGeminiAPI() {
                 this.logDebug('Content script not available on this site or frames. Falling back to injected apply flow (all frames).', 'warning');
                 const { profile = {} } = await chrome.storage.sync.get('profile');
                 const inj = await chrome.scripting.executeScript({
-                    target: { tabId: tab.id, allFrames: true },
+                    target: { tabId: tab.id, allFrames: false },
                     args: [profile],
                     func: (p) => {
                         const setVal = (el, val) => { try { if (el.isContentEditable) { el.textContent = val; el.dispatchEvent(new InputEvent('input', { bubbles: true })); } else { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); } el.dispatchEvent(new Event('change', { bubbles: true })); } catch(_) {} };
@@ -1652,6 +2072,26 @@ async testGeminiAPI() {
                 this.logDebug('📂 No file currently selected in input', 'warning');
             }
             
+            // Check cover letter file input
+            const coverLetterInput = document.getElementById('coverLetterFile');
+            const coverLetterSelected = coverLetterInput?.files?.length > 0;
+            if (coverLetterSelected) {
+                const file = coverLetterInput.files[0];
+                this.logDebug(`📂 Currently selected cover letter file: ${file.name} (${Math.round(file.size / 1024)}KB, ${file.type})`, 'info');
+            } else {
+                this.logDebug('📂 No cover letter file currently selected', 'warning');
+            }
+            
+            // Check grade sheet file input
+            const gradeSheetInput = document.getElementById('gradeSheetFile');
+            const gradeSheetSelected = gradeSheetInput?.files?.length > 0;
+            if (gradeSheetSelected) {
+                const file = gradeSheetInput.files[0];
+                this.logDebug(`📂 Currently selected grade sheet file: ${file.name} (${Math.round(file.size / 1024)}KB, ${file.type})`, 'info');
+            } else {
+                this.logDebug('📂 No grade sheet file currently selected', 'warning');
+            }
+            
             // Check sync storage
             const syncStorage = await chrome.storage.sync.get(null);
             const resumeContentSync = syncStorage.resumeContent;
@@ -1665,6 +2105,8 @@ async testGeminiAPI() {
             const localStorage = await chrome.storage.local.get(null);
             const resumeContentLocal = localStorage.resumeContent;
             const resumeFileLocal = localStorage.resumeFile;
+            const coverLetterContentLocal = localStorage.coverLetterContent;
+            const gradeSheetContentLocal = localStorage.gradeSheetContent;
             
             if (resumeContentLocal) {
                 this.logDebug(`📄 Local storage - resumeContent: ${resumeContentLocal.length} characters`, 'success');
@@ -1678,6 +2120,19 @@ async testGeminiAPI() {
             } else {
                 this.logDebug('📁 Local storage - no resumeFile found', 'warning');
             }
+            
+            if (coverLetterContentLocal) {
+                this.logDebug(`📄 Local storage - coverLetterContent: ${coverLetterContentLocal.length} characters`, 'success');
+            } else {
+                this.logDebug('📄 Local storage - no coverLetterContent found', 'warning');
+            }
+
+            if (gradeSheetContentLocal) {
+                this.logDebug(`📄 Local storage - gradeSheetContent: ${gradeSheetContentLocal.length} characters`, 'success');
+            } else {
+                this.logDebug('📄 Local storage - no gradeSheetContent found', 'warning');
+            }
+
             
             // Summary
             const hasAnyResume = resumeContentSync || resumeContentLocal || resumeFileLocal?.base64;
@@ -1735,7 +2190,7 @@ async testGeminiAPI() {
                     // Fallback: inject a simple script to find and click attach resume elements
                     try {
                         const injectionResult = await chrome.scripting.executeScript({
-                            target: { tabId: tabs[0].id, allFrames: true },
+                            target: { tabId: tabs[0].id, allFrames: false },
                             func: () => {
                                 const isVisible = (el) => {
                                     if (!el) return false;
@@ -2029,8 +2484,8 @@ async testGeminiAPI() {
                 this.logDebug('🔧 Attempting manual content script injection...', 'info');
                 try {
                     await chrome.scripting.executeScript({
-                        target: { tabId: currentTab.id, allFrames: true },
-                        files: ['ai_agent.js', 'content.js', 'simple-popup.js', 'popup.js', 'background.js', 'settings.js']
+                        target: { tabId: currentTab.id, allFrames: false },
+                        files: ['content.js']
                     });
                     
                     // Wait a moment for injection to complete
@@ -2070,7 +2525,7 @@ async testGeminiAPI() {
                 this.logDebug('🔄 Using inline script injection fallback...', 'warning');
                 const { profile = {} } = await chrome.storage.sync.get('profile');
                 const inj = await chrome.scripting.executeScript({
-                    target: { tabId: currentTab.id, allFrames: true },
+                    target: { tabId: currentTab.id, allFrames: false },
                     args: [profile],
                     func: (p) => {
                         const setVal = (el, val) => { 
@@ -2213,8 +2668,8 @@ async testGeminiAPI() {
                 
                 try {
                     await chrome.scripting.executeScript({
-                        target: { tabId: tab.id, allFrames: true },
-                        files: ['ai_agent.js', 'content.js', 'simple-popup.js', 'popup.js', 'background.js', 'settings.js']
+                        target: { tabId: tab.id, allFrames: false },
+                        files: ['content.js']
                     });
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     scanResult = await chrome.tabs.sendMessage(tab.id, { action: 'debugResumeLocations' });
@@ -2305,6 +2760,73 @@ async testGeminiAPI() {
             this.showNotification('Error during upload test', 'error');
         }
     }
+
+    maskAPIKey(apiKey) {
+        if (!apiKey || apiKey.length < 12) return '••••••••';
+        return `${apiKey.substring(0, 8)}••••${apiKey.substring(apiKey.length - 4)}`;
+    }
+
+    updateToggleStatus(isEnabled) {
+        const statusContainer = document.getElementById('toggleStatusText');
+        if (!statusContainer) return;
+        
+        const enabledText = statusContainer.querySelector('.enabled-text');
+        const disabledText = statusContainer.querySelector('.disabled-text');
+        
+        if (enabledText && disabledText) {
+            if (isEnabled) {
+                enabledText.style.display = 'block';
+                disabledText.style.display = 'none';
+            } else {
+                enabledText.style.display = 'none';
+                disabledText.style.display = 'block';
+            }
+        }
+    }
+
+    updateToggleMainText(isEnabled) {
+        const mainTextElement = document.getElementById('toggleMainText');
+        if (mainTextElement) {
+            if (isEnabled) {
+                mainTextElement.textContent = 'Actually Submit Applications';
+                mainTextElement.style.color = '#28a745'; // Green text when enabled
+            } else {
+                mainTextElement.textContent = 'Test Mode - No Submission';
+                mainTextElement.style.color = '#dc3545'; // Red text when disabled
+            }
+        }
+    }
+
+    updateHebrewToggleStatus(isEnabled) {
+        const statusContainer = document.getElementById('hebrewToggleStatusText');
+        if (!statusContainer) return;
+        
+        const enabledText = statusContainer.querySelector('.enabled-text');
+        const disabledText = statusContainer.querySelector('.disabled-text');
+        
+        if (enabledText && disabledText) {
+            if (isEnabled) {
+                enabledText.style.display = 'block';
+                disabledText.style.display = 'none';
+            } else {
+                enabledText.style.display = 'none';
+                disabledText.style.display = 'block';
+            }
+        }
+    }
+
+    updateHebrewToggleMainText(isEnabled) {
+        const mainTextElement = document.getElementById('hebrewToggleMainText');
+        if (mainTextElement) {
+            if (isEnabled) {
+                mainTextElement.textContent = 'Write Messages in Hebrew';
+                mainTextElement.style.color = '#28a745'; // Green text when enabled
+            } else {
+                mainTextElement.textContent = 'Write Messages in English';
+                mainTextElement.style.color = '#dc3545'; // Red text when disabled
+            }
+        }
+    }
 }
 
 // Add CSS animations
@@ -2322,7 +2844,6 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Initialize popup when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     const popupManager = new PopupManager();
     
@@ -2355,9 +2876,8 @@ document.addEventListener('DOMContentLoaded', () => {
         statusBox.classList.add("ready");
         const textEl = document.getElementById("statusText");
         if (textEl) textEl.textContent = "Processing...";
-        }
+    }
 }); 
-
 
 (function attachAutoClose() {
     const IDS = ['fillJobBtn', 'messageRecruiter', 'settingsBtn'];
@@ -2386,4 +2906,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }, { capture: true });
     });
-})();
+});

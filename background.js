@@ -42,8 +42,8 @@ class BackgroundManager {
                 
                 try {
                     await chrome.scripting.executeScript({
-                        target: { tabId: tabId, allFrames: true },
-                        files: ['ai_agent.js', 'content.js', 'simple-popup.js', 'popup.js', 'background.js', 'settings.js']
+                        target: { tabId: tabId, allFrames: false},
+                        files: ['content.js']
                     });
                     console.log(`Content script injected for tab ${tabId}: ${tab.url}`);
                 } catch (error) {

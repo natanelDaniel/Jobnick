@@ -1077,7 +1077,7 @@ export class JobnickAI {
                         if (analysis.shouldApply && analysis.confidence > settings.confidenceThreshold) {
                             // Check submission mode before applying
                             const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-                            const submissionMode = aiAgent?.aiSubmissionMode !== false; // Default to true
+                            const submissionMode = aiAgent?.aiSubmissionMode; // Default to true
                             
                             if (!submissionMode) {
                                 console.log('🧪 Test mode enabled - filling form but NOT submitting application');
@@ -1560,7 +1560,7 @@ JOB CARD:
             
             // Get AI submission mode setting
             const { aiAgent } = await chrome.storage.sync.get('aiAgent');
-            const submissionMode = aiAgent?.aiSubmissionMode !== false; // Default to true
+            const submissionMode = aiAgent?.aiSubmissionMode; // Default to true
             
             if (!submissionMode) {
                 console.log('🧪 Test mode enabled - filling forms but not submitting');
@@ -1575,7 +1575,7 @@ JOB CARD:
                 action: 'applyToJobWithAI',
                 jobData: jobData,
                 profile: this.profile,
-                testMode: !submissionMode // Pass test mode flag to content script
+                submitForm: submissionMode // Pass test mode flag to content script
             });
 
             if (response.success) {
