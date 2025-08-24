@@ -14,8 +14,7 @@ The extension provides three main features to enhance your job search experience
 Watch how Jobnick works in action:
 
 ### 🏥 Immunai Demo
-[![Immunai Demo](https://img.youtube.com/vi/Jeaqlqn1Rts/maxresdefault.jpg)](https://youtu.be/Jeaqlqn1Rts)
-**Click the image above to watch the Immunai demo video on YouTube**
+![Immunai Demo](releases/immunai_HD.gif)
 
 ### 🚗 Mobileye Demo  
 ![Mobileye Demo](releases/Mobileye_HD.gif)
