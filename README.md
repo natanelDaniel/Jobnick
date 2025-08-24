@@ -14,7 +14,7 @@ The extension provides three main features to enhance your job search experience
 Watch how Jobnick works in action:
 
 ### 🏥 Immunai Demo
-![Immunai Demo](releases/immunai_UltraHD.gif)
+![Immunai Demo](releases/immunai_MAXIMUM.gif)
 
 ### 1. 📋 Fill Job
 **Automatically fill out job applications on LinkedIn**
@@ -219,13 +219,13 @@ This project is provided as-is for educational purposes. Users are responsible f
 ## 🎬 Additional Demo Videos
 
 ### 🚗 Mobileye Demo  
-![Mobileye Demo](releases/Mobileye_UltraHD.gif)
+![Mobileye Demo](releases/Mobileye_MAXIMUM.gif)
 
 ### 📱 AppsFlyer Demo
-![AppsFlyer Demo](releases/appsflyer_UltraHD.gif)
+![AppsFlyer Demo](releases/appsflyer_MAXIMUM.gif)
 
 ### 🎯 Meta Demo
-![Meta Demo](releases/meta_UltraHD.gif)
+![Meta Demo](releases/meta_MAXIMUM.gif)
 
 ### 🔢 OneZero Demo
-![OneZero Demo](releases/onezero_UltraHD.gif) 
+![OneZero Demo](releases/onezero_MAXIMUM.gif) 
