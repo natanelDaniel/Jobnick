@@ -9,6 +9,29 @@ The extension provides three main features to enhance your job search experience
 
 ## 🚀 Main Features
 
+<div align="center">
+  <h3>🎥 Demo Videos</h3>
+  <p>Watch how Jobnick works in action:</p>
+  
+  <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; margin: 20px 0;">
+    <div style="text-align: center;">
+      <h4>🏥 Immunai Demo</h4>
+      <video width="320" height="240" controls>
+        <source src="videos/immunai.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+    </div>
+    
+    <div style="text-align: center;">
+      <h4>🚗 Mobileye Demo</h4>
+      <video width="320" height="240" controls>
+        <source src="videos/Mobileye.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+    </div>
+  </div>
+</div>
+
 ### 1. 📋 Fill Job
 **Automatically fill out job applications on LinkedIn**
 - AI-powered form detection and field mapping
