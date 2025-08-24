@@ -19,25 +19,25 @@ Watch how Jobnick works in action:
 
 ### 🚗 Mobileye Demo  
 <video width="320" height="240" controls>
-  <source src="videos/Mobileye.mp4" type="video/mp4">
+  <source src="releases/Mobileye.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
 ### 📱 AppsFlyer Demo
 <video width="320" height="240" controls>
-  <source src="videos/appsflyer.mp4" type="video/mp4">
+  <source src="releases/appsflyer.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
 ### 🎯 Meta Demo
 <video width="320" height="240" controls>
-  <source src="videos/meta.mp4" type="video/mp4">
+  <source src="releases/meta.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
 ### 🔢 OneZero Demo
 <video width="320" height="240" controls>
-  <source src="videos/onezero.mp4" type="video/mp4">
+  <source src="releases/onezero.mp4" type="video/mp4">
   Your browser does not support the video tag.
 </video>
 
